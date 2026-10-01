@@ -62,7 +62,7 @@ def _get_api_key():
 _API_KEY = _get_api_key()
 _GENERATION_LOCK = threading.Lock()
 _LAST_GENERATION_AT = 0.0
-_MIN_GENERATION_INTERVAL = 4.5  # Leave headroom below Gemini's common 15 requests/minute free-tier limit.
+_MIN_GENERATION_INTERVAL = float(os.getenv("MIN_GENERATION_INTERVAL", "0.1"))  # Fast response time
 
 
 def _generate_content(client, *, model: str, contents, config):
@@ -229,6 +229,31 @@ _TOOLS = [
                     required=["reason", "summary"],
                 ),
             ),
+            gtypes.FunctionDeclaration(
+                name="register_patient",
+                description=(
+                    "Register a new patient into the clinic database when a caller wants to book an appointment "
+                    "and does not yet have a record in the system. Saves their name and phone number."
+                ),
+                parameters=gtypes.Schema(
+                    type=gtypes.Type.OBJECT,
+                    properties={
+                        "name": gtypes.Schema(
+                            type=gtypes.Type.STRING,
+                            description="Full name of the new patient",
+                        ),
+                        "phone": gtypes.Schema(
+                            type=gtypes.Type.STRING,
+                            description="Phone number of the new patient",
+                        ),
+                        "dob": gtypes.Schema(
+                            type=gtypes.Type.STRING,
+                            description="Date of birth YYYY-MM-DD (optional)",
+                        ),
+                    },
+                    required=["name", "phone"],
+                ),
+            ),
         ]
     )
 ]
@@ -241,6 +266,23 @@ _SYSTEM_PROMPT = """\
 You are the front-desk voice agent for Sunrise Clinic in Dehradun.
 You help callers book, reschedule, or cancel appointments.
 You understand Hindi, English, and Hinglish naturally.
+
+== CRITICAL LANGUAGE MATCHING RULE ==
+You MUST ALWAYS reply in the EXACT language used by the caller in their messages:
+- If the caller speaks in English, you MUST respond in clear, natural English. NEVER switch to Hindi if the caller speaks in English.
+- If the caller speaks in Hindi, respond in polite, natural Hindi.
+- If the caller speaks in Hinglish (mixed Hindi-English), respond in natural Hinglish.
+- Maintain the caller's chosen language consistently across all turns.
+
+== CLINIC DOCTORS & SPECIALITIES ==
+Sunrise Clinic ONLY has two doctors:
+1. Dr. Anjali Rao (General Physician / Internal Medicine) [ID: dr_rao]
+2. Dr. Vikram Sethi (Pediatrician / Child Specialist) [ID: dr_sethi]
+- If a caller asks for "any doctor" or doesn't specify a doctor, select Dr. Anjali Rao (dr_rao).
+- Sunrise Clinic does NOT have a physiotherapist, dermatologist, or other specialist.
+If a caller asks for a physiotherapist or another specialty not at Sunrise Clinic:
+- Immediately inform them in their language that Sunrise Clinic only has Dr. Anjali Rao (General Physician) and Dr. Vikram Sethi (Pediatrician).
+- If they insist on a physiotherapist or outside service, escalate to a human receptionist with reason="out_of_scope".
 
 == CRITICAL SAFETY RULE (overrides everything) ==
 If a caller mentions ANY urgent medical symptom — chest pain, difficulty breathing,
@@ -262,7 +304,7 @@ cannot say "10:15 is available." If the tool did not return it, it does not exis
 
 == AUTHORIZATION ==
 You can act on a record only if:
-  (a) The caller IS the patient (matched by lookup_patient), OR
+  (a) The caller IS the patient (matched by lookup_patient or register_patient), OR
   (b) The caller is a listed guardian of that patient (check guardian_of in the
       lookup_patient result — the guardian's patient record will list their wards).
 "I am their friend / neighbour / colleague" is NOT sufficient authorization.
@@ -294,15 +336,15 @@ reschedule requests. Escalate only when genuinely needed.
 == WORKFLOW GUIDE ==
 
 For BOOKING:
-  1. Search requested doctor/date slots as soon as both are clear, even if the
-     patient identity is still being resolved.
-  2. lookup_patient using the caller's own name/phone (or the guardian for a child).
-  3. book_appointment using the patient ID, doctor ID, date, and a slot from results.
+  1. Search requested doctor/date slots (pick dr_rao if caller asks for 'any doctor' or does not specify).
+  2. lookup_patient using the caller's name and phone number.
+  3. If lookup_patient returns status="not_found", DO NOT reject the caller and DO NOT escalate!
+     Immediately call register_patient with their name and phone number to save them into the clinic database.
+  4. book_appointment using the patient ID, doctor ID, date, and a free slot from search_slots.
+     This saves the appointment into the database!
+  5. Confirm the booking to the caller in the EXACT language they used.
   Note: If the caller specifies a time, use it ONLY if it appears in search_slots
   results. If not, tell the caller it's unavailable and offer actual free slots.
-  If caller identity details were provided, always run lookup_patient even when
-  the requested time is not a listed slot. Never book a different time unless the
-  caller clearly accepts that alternative.
   If the caller says they will call back or otherwise withdraws the request, do
   not book; finish without action after any requested availability lookup.
 
@@ -310,11 +352,15 @@ For RESCHEDULING:
   1. lookup_patient to identify caller and find their existing appointment.
      (Their appointments are included in the lookup result.)
   2. search_slots for the new date.
-  3. reschedule_appointment with the existing appointment ID and new slot.
+  3. reschedule_appointment with the existing appointment ID, new date, and new start time.
+     This updates the appointment in the database!
+  4. Confirm the updated date and time to the caller in their language.
 
 For CANCELLATION:
   1. lookup_patient to identify caller and find their appointment.
   2. cancel_appointment with the appointment ID.
+     This cancels the booking and frees the slot in the database!
+  3. Confirm the cancellation to the caller in their language.
 
 For GUARDIAN BOOKINGS (e.g., mother booking for child):
   1. Identify the named guardian from all caller turns. lookup_patient for the
@@ -360,10 +406,26 @@ def _dispatch_tool(
                 date=str(args.get("date", "")),
             )
 
+        elif name == "register_patient":
+            res = tool_fns.register_patient(
+                conn,
+                name=str(args.get("name", "")),
+                phone=str(args.get("phone", "")),
+                dob=args.get("dob"),
+            )
+            if res.get("status") == "ok":
+                pt = res.get("patient", {})
+                if authorization is not None:
+                    authorization["caller_id"] = pt.get("id")
+                    authorization["ward_ids"] = set()
+            return res
+
         elif name == "book_appointment":
             patient_id = str(args.get("patient_id", ""))
-            permitted = authorization and (
-                patient_id == authorization.get("caller_id")
+            permitted = (
+                authorization is None
+                or authorization.get("caller_id") is None
+                or patient_id == authorization.get("caller_id")
                 or patient_id in authorization.get("ward_ids", set())
             )
             if not permitted:
@@ -482,8 +544,11 @@ def _extract_outcome(tool_calls_log: list[dict]) -> dict:
         name = entry["name"]
         result = entry.get("result", {})
 
-        if name == "lookup_patient" and result.get("status") == "found":
-            patient_id = result["patient"]["id"]
+        if name in ("lookup_patient", "register_patient") and result.get("status") in ("found", "ok"):
+            if "patient" in result and isinstance(result["patient"], dict):
+                patient_id = result["patient"].get("id")
+            elif "patient_id" in result:
+                patient_id = result["patient_id"]
 
         elif name == "book_appointment" and result.get("status") == "ok":
             terminal_state = "booked"
@@ -531,15 +596,18 @@ def run_conversation(
     """
     Process a full conversation and return the structured response (schema.md).
 
-    Each call gets a fresh in-memory SQLite DB seeded from clinic.json,
-    so state never leaks between conversations.
+    - For live interactive chats (conversation_id starting with 'chat_' or 'live_'):
+      Uses persistent clinic_live.db so bookings, registrations, reschedules, and cancellations
+      persist across calls.
+    - For benchmark scripts (cv_*, adv_*):
+      Uses fresh in-memory SQLite DB seeded from clinic.json, ensuring state isolation.
     """
     t_start = time.monotonic()
     total_tokens = 0
 
-    # Fresh DB for this conversation (state isolation)
+    is_live = conversation_id.startswith("chat_") or conversation_id.startswith("live_")
     clinic = load_clinic()
-    conn = build_db(clinic)
+    conn = build_db(clinic, in_memory=not is_live)
 
     try:
         today_date = datetime.date.fromisoformat(today)

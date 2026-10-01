@@ -445,3 +445,52 @@ class TestDateUtils:
         from date_utils import parse_date
         result = parse_date("2026-10-08", self.today)
         assert result == datetime.date(2026, 10, 8)
+
+
+# ---------------------------------------------------------------------------
+# register_patient and appointment lifecycle
+# ---------------------------------------------------------------------------
+
+class TestRegisterPatientAndLifecycle:
+    def test_register_new_patient(self, conn):
+        res = tools.register_patient(conn, name="Apurav Sharma", phone="8306205670")
+        assert res["status"] == "ok"
+        assert res["patient"]["id"] == "pt_0041"
+        assert res["patient"]["name"] == "Apurav Sharma"
+        assert res["patient"]["phone"] == "8306205670"
+
+        # Check in DB
+        row = conn.execute("SELECT * FROM patients WHERE id='pt_0041'").fetchone()
+        assert row is not None
+        assert row["name"] == "Apurav Sharma"
+
+    def test_register_existing_returns_existing(self, conn):
+        res1 = tools.register_patient(conn, name="Apurav Sharma", phone="8306205670")
+        res2 = tools.register_patient(conn, name="Apurav Sharma", phone="8306205670")
+        assert res1["patient"]["id"] == res2["patient"]["id"]
+
+    def test_book_with_registered_patient(self, conn):
+        res_pt = tools.register_patient(conn, name="Apurav Sharma", phone="8306205670")
+        pt_id = res_pt["patient"]["id"]
+        res_book = tools.book_appointment(
+            conn, patient_id=pt_id, doctor_id="dr_rao", date="2026-10-03", start="09:00"
+        )
+        assert res_book["status"] == "ok"
+        assert res_book["appointment_id"].startswith("ap_")
+
+        # Slot is now taken
+        slots = tools.search_slots(conn, doctor_id="dr_rao", date="2026-10-03")
+        assert "09:00" not in slots["slots"]
+
+        # Cancel frees the slot
+        res_cancel = tools.cancel_appointment(conn, appointment_id=res_book["appointment_id"])
+        assert res_cancel["status"] == "ok"
+        slots_after = tools.search_slots(conn, doctor_id="dr_rao", date="2026-10-03")
+        assert "09:00" in slots_after["slots"]
+
+        # Re-booking the freed slot works
+        res_rebook = tools.book_appointment(
+            conn, patient_id=pt_id, doctor_id="dr_rao", date="2026-10-03", start="09:00"
+        )
+        assert res_rebook["status"] == "ok"
+

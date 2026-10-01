@@ -582,6 +582,67 @@ def is_guardian_of(conn: sqlite3.Connection, guardian_id: str, ward_id: str) -> 
     ).fetchone() is not None
 
 
+def register_patient(
+    conn: sqlite3.Connection,
+    *,
+    name: str,
+    phone: str,
+    dob: str | None = None,
+) -> dict:
+    """
+    Register a new patient into the database.
+    Saves the caller's details into the patients table so appointments can be booked.
+    """
+    name_clean = (name or "").strip()
+    phone_clean = (phone or "").strip().replace(" ", "").replace("-", "")
+
+    if not name_clean or not phone_clean:
+        return {
+            "status": "error",
+            "code": "missing_info",
+            "message": "Both patient name and phone number are required for registration.",
+        }
+
+    # Check if this patient already exists under this phone
+    existing = conn.execute(
+        "SELECT id, name, phone, dob FROM patients WHERE REPLACE(REPLACE(phone,' ',''),'-','') = ?",
+        (phone_clean,),
+    ).fetchone()
+
+    if existing:
+        return {
+            "status": "ok",
+            "patient": {
+                "id": existing["id"],
+                "name": existing["name"],
+                "phone": existing["phone"],
+                "dob": existing["dob"],
+            },
+            "message": f"Patient already registered with ID {existing['id']}.",
+        }
+
+    from db import next_patient_id
+    new_id = next_patient_id(conn)
+    dob_val = (dob or "").strip() if dob else "1990-01-01"
+
+    conn.execute(
+        "INSERT INTO patients (id, name, phone, dob) VALUES (?, ?, ?, ?)",
+        (new_id, name_clean, phone.strip(), dob_val),
+    )
+    conn.commit()
+
+    return {
+        "status": "ok",
+        "patient": {
+            "id": new_id,
+            "name": name_clean,
+            "phone": phone.strip(),
+            "dob": dob_val,
+        },
+        "message": f"Patient {name_clean} registered successfully with ID {new_id}.",
+    }
+
+
 def escalate_to_human(
     conn: sqlite3.Connection,
     *,
