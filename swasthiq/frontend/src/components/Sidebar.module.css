@@ -1,0 +1,253 @@
+.sidebar {
+  width: var(--sidebar-w);
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 12px rgba(15, 23, 42, 0.03);
+}
+
+.header {
+  padding: 20px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logoIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.2);
+}
+
+.logoName {
+  display: block;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-1);
+  letter-spacing: -0.4px;
+  line-height: 1.2;
+}
+
+.logoSub {
+  display: block;
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.nav {
+  flex: 1;
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.navSectionLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  padding: 12px 10px 4px 10px;
+  text-transform: uppercase;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  border: 1px solid transparent;
+}
+
+.navIconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  transition: color 0.18s ease;
+}
+
+.navItem:hover {
+  background: var(--bg-subtle);
+  color: var(--text-1);
+}
+
+.navItem:hover .navIconWrapper {
+  color: var(--indigo);
+}
+
+.navItem.active {
+  background: var(--indigo-bg);
+  color: var(--indigo);
+  border: 1px solid var(--indigo-border);
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.08);
+}
+
+.navItem.active .navIconWrapper {
+  color: var(--indigo);
+}
+
+.navText {
+  flex: 1;
+}
+
+.liveTag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  padding: 2px 6px;
+  border-radius: 12px;
+}
+
+.badge {
+  background: #f43f5e;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  min-width: 20px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(244, 63, 94, 0.3);
+}
+
+.footer {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.statusPill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.online {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.online .statusDot {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  animation: pulse 2s infinite;
+}
+
+.offline {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.offline .statusDot {
+  background: #f43f5e;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.15); }
+}
+
+.clinicInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clinicBadge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.clinicName {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: 68px !important;
+  }
+  .header {
+    padding: 14px 8px;
+    display: flex;
+    justify-content: center;
+  }
+  .logoName, .logoSub, .navText, .navSectionLabel, .liveTag, .clinicInfo, .statusText {
+    display: none !important;
+  }
+  .nav {
+    padding: 12px 6px;
+    align-items: center;
+  }
+  .navItem {
+    justify-content: center;
+    padding: 10px;
+    width: 44px;
+    height: 44px;
+  }
+  .badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+  .footer {
+    padding: 12px 8px;
+    align-items: center;
+  }
+  .statusPill {
+    padding: 8px;
+    justify-content: center;
+  }
+}
+

@@ -1,0 +1,24 @@
+// Centralised API helper — uses Vite proxy in dev, full URL in prod
+const BASE = import.meta.env.VITE_API_URL || ''
+
+async function request(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export const api = {
+  health:               () => request('/health'),
+  stats:                () => request('/api/stats'),
+  handoffs:             () => request('/api/handoffs'),
+  conversations:        () => request('/api/conversations'),
+  conversation:         (id) => request(`/api/conversations/${id}`),
+  resolveHandoff:       (id) => request(`/api/handoffs/${id}/resolve`, { method: 'POST' }),
+  runAgent:             (body) => request('/agent/run', { method: 'POST', body: JSON.stringify(body) }),
+}

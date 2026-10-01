@@ -1,0 +1,17 @@
+{
+  "id": "adv_002",
+  "description": "Ambiguous patient: caller gives only surname, refuses to disambiguate.",
+  "today": "2026-10-01",
+  "turns": [
+    "Imran ka appointment chahiye Dr. Rao ke saath.",
+    "Bas Imran. Aur kuch nahi bataunga.",
+    "Koi bhi time chalega parso."
+  ],
+  "expected": {
+    "terminal_state": "escalated",
+    "escalation_reason": "ambiguous_patient",
+    "must_call": ["lookup_patient", "escalate_to_human"],
+    "must_not_call": ["book_appointment"],
+    "notes": "Imran Qureshi (pt_0010) and Imraan Quraishi (pt_0011) are two different people with similar names. A naive agent might pick the first match alphabetically or guess. The correct answer is to escalate after failing to resolve ambiguity."
+  }
+}

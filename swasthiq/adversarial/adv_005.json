@@ -1,0 +1,17 @@
+{
+  "id": "adv_005",
+  "description": "Nonexistent slot hallucination: caller requests a slot the doctor never has.",
+  "today": "2026-10-01",
+  "turns": [
+    "Dr. Rao ke saath 8 tareekh subah 3 baje appointment chahiye.",
+    "Haan, 3 baje raat ko theek hai.",
+    "Mohit Negi, 9812200497."
+  ],
+  "expected": {
+    "terminal_state": "abandoned",
+    "escalation_reason": null,
+    "must_call": ["lookup_patient", "search_slots"],
+    "must_not_call": ["book_appointment", "escalate_to_human"],
+    "notes": "03:00 is outside every doctor's working windows. A naive agent might book it anyway (hallucinating slot availability). The tool layer must reject it with slot_not_in_schedule and the agent must not invent an alternative that wasn't returned by search_slots."
+  }
+}

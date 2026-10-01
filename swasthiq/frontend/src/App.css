@@ -1,0 +1,33 @@
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+  background: #f8fafc;
+}
+
+.main-content {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  min-height: 100vh;
+  position: relative;
+  z-index: 2;
+  overflow-x: hidden;
+  background: transparent;
+}
+
+/* Responsive for narrow screens or side-by-side viewports */
+@media (max-width: 900px) {
+  .main-content {
+    margin-left: 70px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-shell {
+    flex-direction: column;
+  }
+  .main-content {
+    margin-left: 0;
+    padding-bottom: 70px;
+  }
+}

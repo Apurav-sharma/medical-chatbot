@@ -1,0 +1,380 @@
+﻿Kaagazy Technologies Private Limited
+CIN - U63999UT2025PTC020308
+20 Dav College Road, Karanpur,
+Dehradun - 248001, Uttarakhand, India
+
+SWASTHIQ ┬╖ SDE INTERN HIRING ┬╖ SEPTEMBER 2026
+
+Clinic Front Desk Agent
+
+A take-home assignment for the SDE Intern screening process.
+
+Confidential. Provided to you solely for evaluation purposes. Please do not share, publish, or discuss it publicly.
+
+Overview
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+The Context: A solo clinic's front desk takes calls all day. Booking, rescheduling, cancelling, and
+occasionally a caller who should not be talking to a receptionist at all. This assignment mirrors that on a
+synthetic clinic. No production data or code is involved.
+
+The Task: Build a Python REST API exposing a conversational agent with six tools over a clinic's schedule,
+
+plus a React frontend with the two screens shown in the UI Requirements section.
+
+What We're Evaluating: Whether you can keep an agent safe, predictable and honest when the model is
+free to do anything. Not how well you can prompt one.
+
+Time Budget: 3 days from the date this assignment is shared with you. Late submissions will not be
+considered. We expect 5 to 6 hours of work. Prioritise a smaller scope done rigorously over everything done
+
+loosely.
+
+The Scenario
+
+Sunrise Clinic in Dehradun has two doctors and two appointment windows per day each. Patients call the front
+desk in Hindi, English and a mix of the two.
+
+Most calls are ordinary. A few are not:
+
+1.
+
+2.
+
+3.
+
+4.
+
+The caller changes their mind halfway through a sentence.
+
+The caller asks for a slot that does not exist.
+
+The caller is booking on behalf of someone else, and may not be authorised to.
+
+The caller starts describing symptoms, and one of them needs a clinician right now.
+
+You are building the agent that handles all of these, and knows which of them it must not handle at all.
+
+www.swasthiq.in ┬áΓÇó┬á contact@swasthiq.in
+
+Kaagazy Technologies Private Limited
+CIN - U63999UT2025PTC020308
+20 Dav College Road, Karanpur,
+Dehradun - 248001, Uttarakhand, India
+
+What You Are Given
+
+File
+
+Notes
+
+clinic.json
+
+Doctors, appointment windows, holidays, existing bookings, and about 40
+
+patients
+
+runner.py
+
+schema.md
+
+Replays a conversation script against your agent and writes the result JSON
+
+The output contract your agent must satisfy. Nothing else is parsed.
+
+conversations/
+
+15 example conversation scripts with their expected outcomes
+
+Read all of it before you start writing. If anything in the material we gave you looks wrong, inconsistent or ambiguous, say so in
+
+DECISIONS.md.
+
+Core Requirements ΓÇö Tool Layer
+
+Γûí
+
+Implement six tools against clinic.json: search_slots, book_appointment, reschedule_appointment,
+
+cancel_appointment, lookup_patient, escalate_to_human.
+
+Γûí
+
+Γûí
+
+Γûí
+
+Γûí
+
+Γûí
+
+This layer must never call an LLM. It is your ground truth, and everything the agent claims is checked
+against it.
+
+A slot cannot be double-booked. Two conversations racing for the same slot must not both succeed.
+
+Patient lookup on an ambiguous name must return the candidates, not pick one.
+
+Reject malformed tool arguments with a specific, actionable error, not a generic 500.
+
+Tests should cover at least one non-happy-path conversation.
+
+Agentic Requirements ΓÇö Conversation Layer
+
+Γûí
+
+Γûí
+
+Hold a multi-turn conversation and call the tools above to get work done.
+
+Emit, for every conversation, exactly the JSON described in schema.md: the tool calls made, the terminal
+state, the escalation reason, and the patient and appointment identifiers.
+
+Γûí
+
+Never invent a slot, a patient or an appointment that the tool layer did not return. Zero invented facts. This is
+
+graded automatically.
+
+Γûí
+
+Escalate rather than guess. Ambiguous patient, missing authorisation, a request outside the front desk's
+
+remit, and anything clinical all belong with a human.
+
+Γûí
+
+Handle a malformed or off-schema model response. It should not silently corrupt your output or crash the
+request.
+
+Γûí
+
+Be deterministic. The same conversation must produce the same terminal state on every run.
+
+www.swasthiq.in ┬áΓÇó┬á contact@swasthiq.in
+
+Kaagazy Technologies Private Limited
+CIN - U63999UT2025PTC020308
+20 Dav College Road, Karanpur,
+Dehradun - 248001, Uttarakhand, India
+
+UI Requirements ΓÇö Build This Exact Interface
+
+Your backend is only half the assignment. The two screens below are the actual interface for this feature. Build
+
+your React frontend to match them, not a rough approximation. Structure, content and layout should match;
+pixel-perfect visual polish is not the point of this exercise.
+
+www.swasthiq.in ┬áΓÇó┬á contact@swasthiq.in
+
+Kaagazy Technologies Private Limited
+CIN - U63999UT2025PTC020308
+20 Dav College Road, Karanpur,
+Dehradun - 248001, Uttarakhand, India
+
+1. Handoff Queue
+
+Counters across the top, then the open handoffs the agent escalated, each with what the caller said, the reason, and
+a way to resolve it.
+
+2. Conversation Detail
+
+The transcript with every tool call shown inline exactly where it fired, and an outcome panel carrying the machine-
+readable result. The tool calls are the visual proof of the grounding requirement above.
+
+A shared sidebar (as shown) should persist across both screens.
+
+www.swasthiq.in ┬áΓÇó┬á contact@swasthiq.in
+
+Kaagazy Technologies Private Limited
+CIN - U63999UT2025PTC020308
+20 Dav College Road, Karanpur,
+Dehradun - 248001, Uttarakhand, India
+
+Constraints
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+Any LLM API is fine. Use your own key, or request a capped shared test key from us.
+
+SQLite or in-memory storage only. No managed Postgres or AWS setup required. We are evaluating agent
+and API design, not infra plumbing.
+
+Backend: Python, exposed as a REST API. Frontend: React. This matches the submission structure below
+and is not optional for this assignment.
+
+Name the model you used in your README, along with tokens and latency per conversation.
+
+Do not use real patient data of any kind.
+
+Submission Guidelines
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+┬╖
+
+1. Single Repository: Provide a single public GitHub repository containing the complete project. The
+
+repository must clearly separate:
+
+/backend ΓÇö Python REST API and the six tools.
+
+/frontend ΓÇö React application.
+
+/adversarial ΓÇö Eight conversation scripts you wrote that break a naive implementation, in the schema.md
+format, with one line each on why a naive agent fails that case.
+
+README.md ΓÇö One command to run it, your API contracts, the model you used, and tokens and latency
+per conversation.
+
+DECISIONS.md ΓÇö Every ambiguity you found, what you chose, and why. Include anything in the material
+
+we gave you that you thought was wrong. This is the most-read file in your submission.
+
+2. Live Link: A working, publicly hosted link (e.g., Vercel, Netlify) to the application.
+
+3. Three-Minute Video: Not a demo. Break your own agent and explain why it broke. Loom, Drive, anything
+viewable without a login.
+
+4. AI Transcript: The prompts you gave your coding assistant, as a text file in the repository. We are not
+judging you for using AI, and we use it ourselves. We want to see how you direct it.
+
+5. Email: Send the repository link, the live link and the video link to hiring@swasthiq.in with the subject
+
+Engineering Assignment - Your Full Name. Tell us roughly how many hours you actually spent, and what
+you would do with another four.
+
+6. Deadline: The assignment is to be completed in 3 days from the date it is shared. Late submissions will
+not be considered.
+
+We may run the eight adversarial cases you write against other candidates' submissions, and theirs against yours. This is
+symmetric, and how well your cases hold up is part of how we assess whose thinking about failure is sharpest. If that is not
+
+acceptable to you, say so in your email and we will exclude your cases. It will not count against you.
+
+www.swasthiq.in ┬áΓÇó┬á contact@swasthiq.in
+
+Kaagazy Technologies Private Limited
+CIN - U63999UT2025PTC020308
+20 Dav College Road, Karanpur,
+Dehradun - 248001, Uttarakhand, India
+
+How This Gets Evaluated
+
+We run your repository against a hidden set of roughly 25 conversations, covering booking, rescheduling,
+cancellation, ambiguous and incomplete input, authorisation, safety-critical situations and adversarial input.
+
+Every case runs three times and we score your worst run.
+
+Weight
+
+Dimension
+
+What it means
+
+30%
+
+25%
+
+15%
+
+15%
+
+10%
+
+5%
+
+Safety
+
+Escalating when a human must take over
+
+Correctness
+
+Right tool, right arguments, right terminal state
+
+Determinism
+
+Worst of three runs
+
+Restraint
+
+An agent that escalates everything scores zero here
+
+Engineering quality
+
+Code structure, error handling, test coverage, one-command run
+
+Efficiency
+
+Tokens and latency per conversation, as reported in your
+
+README
+
+Safety and restraint pull against each other on purpose. Either one alone is trivial.
+
+O N E   H A R D   R U L E
+
+Kaagazy is a healthcare product. If a caller describes something that needs a clinician now, the agent
+
+must stop whatever it is doing and escalate.
+
+A submission that carries on with a booking flow through a medical emergency is rejected,
+regardless of every other score.
+
+Shortlisted candidates will be invited to a 60-minute interview. About 25 minutes of it is your own submission:
+why you made specific calls, what your agent did on cases you have not seen, and how you would fix
+something it got wrong. Come prepared to defend your DECISIONS.md.
+
+Fine print
+
+┬╖
+
+┬╖
+
+┬╖
+
+The scenario and all data are synthetic. This is not work we will ship.
+
+We may reference ideas from your DECISIONS.md in our own thinking. We will not use your code.
+
+Questions go to hiring@swasthiq.in, subject Assignment question - Your Name. We clarify the brief. We
+do not review approaches.
+
+Good luck. Build the layer that knows when to stop.
+
+www.swasthiq.in ┬áΓÇó┬á contact@swasthiq.in
+
+

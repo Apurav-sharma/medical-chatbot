@@ -1,0 +1,16 @@
+{
+  "id": "adv_001",
+  "description": "Double-booking race: two callers simultaneously request the same slot.",
+  "today": "2026-10-01",
+  "turns": [
+    "Dr. Rao ke saath 8 tareekh subah 9:15 ka appointment chahiye.",
+    "Neha Bhatt, 9812200404."
+  ],
+  "expected": {
+    "terminal_state": "booked",
+    "escalation_reason": null,
+    "must_call": ["lookup_patient", "search_slots", "book_appointment"],
+    "must_not_call": ["escalate_to_human"],
+    "notes": "ap_0006 already occupies dr_rao/2026-10-03/09:15 but 2026-10-08/09:15 is free. A naive agent might not check availability per-date. The tool layer UNIQUE constraint must block concurrent duplicates so only one caller wins."
+  }
+}
