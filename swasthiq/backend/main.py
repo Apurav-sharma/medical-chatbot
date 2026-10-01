@@ -350,3 +350,78 @@ async def stats() -> dict:
             pass
 
     return {"stats": counts}
+
+
+# ---------------------------------------------------------------------------
+# Appointments & Schedule endpoints for frontend
+# ---------------------------------------------------------------------------
+
+@app.get("/api/appointments")
+async def list_appointments(
+    status: str | None = None,
+    doctor_id: str | None = None,
+    date: str | None = None,
+    q: str | None = None,
+) -> dict:
+    """Return all appointments stored in the database with patient and doctor details."""
+    conn = build_db(in_memory=False)
+    query = """
+        SELECT 
+            a.id, a.patient_id, a.doctor_id, a.date, a.start_time, a.end_time, a.status,
+            p.name as patient_name, p.phone as patient_phone, p.dob as patient_dob,
+            d.name as doctor_name, d.speciality as doctor_speciality
+        FROM appointments a
+        LEFT JOIN patients p ON a.patient_id = p.id
+        LEFT JOIN doctors d ON a.doctor_id = d.id
+        WHERE 1=1
+    """
+    params: list[Any] = []
+    if status and status != "all":
+        query += " AND a.status = ?"
+        params.append(status)
+    if doctor_id and doctor_id != "all":
+        query += " AND a.doctor_id = ?"
+        params.append(doctor_id)
+    if date:
+        query += " AND a.date = ?"
+        params.append(date)
+    if q and q.strip():
+        term = f"%{q.strip().lower()}%"
+        query += " AND (LOWER(p.name) LIKE ? OR p.phone LIKE ? OR LOWER(a.id) LIKE ?)"
+        params.extend([term, f"%{q.strip()}%", term])
+
+    query += " ORDER BY a.date DESC, a.start_time DESC"
+    rows = conn.execute(query, params).fetchall()
+
+    appointments = [dict(r) for r in rows]
+    total_count = len(appointments)
+    booked_count = sum(1 for a in appointments if a["status"] == "booked")
+    cancelled_count = sum(1 for a in appointments if a["status"] == "cancelled")
+
+    return {
+        "appointments": appointments,
+        "counts": {
+            "total": total_count,
+            "booked": booked_count,
+            "cancelled": cancelled_count,
+        },
+    }
+
+
+@app.post("/api/appointments/{appointment_id}/cancel")
+async def cancel_appointment_api(appointment_id: str) -> dict:
+    """Cancel a booked appointment and free its slot in the database."""
+    import tools
+    conn = build_db(in_memory=False)
+    res = tools.cancel_appointment(conn, appointment_id=appointment_id)
+    if res.get("status") == "error":
+        raise HTTPException(status_code=400, detail=res.get("message", "Cancellation failed"))
+    return res
+
+
+@app.get("/api/doctors")
+async def list_doctors() -> dict:
+    """Return list of clinic doctors."""
+    conn = build_db(in_memory=False)
+    rows = conn.execute("SELECT id, name, speciality FROM doctors ORDER BY name").fetchall()
+    return {"doctors": [dict(r) for r in rows]}

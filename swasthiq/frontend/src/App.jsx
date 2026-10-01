@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import LiveChat from './pages/LiveChat'
+import Appointments from './pages/Appointments'
 import HandoffQueue from './pages/HandoffQueue'
 import ConversationDetail from './pages/ConversationDetail'
 import './App.css'
@@ -21,6 +22,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/chat" replace />} />
           <Route path="/chat" element={<LiveChat />} />
+          <Route path="/appointments" element={<Appointments />} />
           <Route path="/handoffs" element={<HandoffQueue />} />
           <Route path="/conversations" element={<ConversationDetail />} />
           <Route path="/conversations/:id" element={<ConversationDetail />} />

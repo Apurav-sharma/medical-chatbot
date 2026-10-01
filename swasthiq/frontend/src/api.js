@@ -21,4 +21,15 @@ export const api = {
   conversation:         (id) => request(`/api/conversations/${id}`),
   resolveHandoff:       (id) => request(`/api/handoffs/${id}/resolve`, { method: 'POST' }),
   runAgent:             (body) => request('/agent/run', { method: 'POST', body: JSON.stringify(body) }),
+  appointments:         (params = {}) => {
+    const query = new URLSearchParams()
+    if (params.status && params.status !== 'all') query.append('status', params.status)
+    if (params.doctor_id && params.doctor_id !== 'all') query.append('doctor_id', params.doctor_id)
+    if (params.date) query.append('date', params.date)
+    if (params.q) query.append('q', params.q)
+    const qs = query.toString() ? `?${query.toString()}` : ''
+    return request(`/api/appointments${qs}`)
+  },
+  cancelAppointment:    (id) => request(`/api/appointments/${id}/cancel`, { method: 'POST' }),
+  doctors:              () => request('/api/doctors'),
 }

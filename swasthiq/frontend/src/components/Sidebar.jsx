@@ -41,9 +41,19 @@ const IconConversations = () => (
   </svg>
 )
 
+const IconCalendar = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+)
+
 export default function Sidebar() {
   const [online, setOnline] = useState(null)
   const [openCount, setOpenCount] = useState(0)
+  const [apptCount, setApptCount] = useState(0)
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -59,8 +69,12 @@ export default function Sidebar() {
 
     const loadCounts = async () => {
       try {
-        const data = await api.handoffs()
-        setOpenCount((data.counts || {}).open || 0)
+        const [handoffData, apptData] = await Promise.all([
+          api.handoffs().catch(() => ({})),
+          api.appointments({ status: 'booked' }).catch(() => ({})),
+        ])
+        setOpenCount((handoffData.counts || {}).open || 0)
+        setApptCount((apptData.counts || {}).booked || 0)
       } catch {}
     }
     loadCounts()
@@ -95,6 +109,23 @@ export default function Sidebar() {
           </div>
           <span className={styles.navText}>Live Agent Chat</span>
           <span className={styles.liveTag}>LIVE</span>
+        </NavLink>
+
+        <div className={styles.navSectionLabel}>CLINIC DATABASE & SCHEDULE</div>
+
+        <NavLink
+          to="/appointments"
+          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
+        >
+          <div className={styles.navIconWrapper}>
+            <IconCalendar />
+          </div>
+          <span className={styles.navText}>Appointments DB</span>
+          {apptCount > 0 && (
+            <span className={styles.badge} style={{ background: '#ecfdf5', color: '#059669', borderColor: '#a7f3d0' }}>
+              {apptCount}
+            </span>
+          )}
         </NavLink>
 
         <div className={styles.navSectionLabel}>EVALUATION SCREENS</div>

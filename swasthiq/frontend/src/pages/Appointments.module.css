@@ -1,0 +1,912 @@
+/* =====================================================
+   Appointments Page — Modern Light Healthcare UI
+   ===================================================== */
+
+.page {
+  padding: 32px 36px;
+  min-height: 100vh;
+  position: relative;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ─── Topbar ─── */
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.titleBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--indigo-bg);
+  border: 1px solid var(--indigo-border);
+  color: var(--indigo);
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 8px;
+}
+
+.pulseDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--indigo);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(99, 102, 241, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+}
+
+.pageTitle {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-1);
+  letter-spacing: -0.6px;
+  line-height: 1.2;
+}
+
+.pageSub {
+  font-size: 14px;
+  color: var(--text-3);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.refreshBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.18s ease;
+}
+
+.refreshBtn:hover {
+  background: var(--bg-subtle);
+  color: var(--indigo);
+  border-color: var(--indigo-border);
+  transform: translateY(-1px);
+}
+
+.refreshIcon {
+  transition: transform 0.3s ease;
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.bookChatBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--indigo) 0%, #0284c7 100%);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 3px 12px rgba(79, 70, 229, 0.25);
+  transition: all 0.18s ease;
+}
+
+.bookChatBtn:hover {
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.35);
+  transform: translateY(-1px);
+}
+
+/* ─── Metrics Cards Row ─── */
+.metricsRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metricCard {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.metricCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.metricIconWrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.metricValue {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.7px;
+  line-height: 1.1;
+}
+
+.metricLabel {
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* ─── Filter Section ─── */
+.filterSection {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.statusTabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.statusTab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.statusTab:hover {
+  background: var(--bg-subtle);
+  color: var(--text-1);
+}
+
+.statusTabActive {
+  background: var(--indigo-bg);
+  color: var(--indigo);
+  border-color: var(--indigo-border);
+  font-weight: 700;
+}
+
+.tabBadge {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.statusTabActive .tabBadge {
+  background: var(--indigo);
+  color: #ffffff;
+  border-color: var(--indigo);
+}
+
+.greenDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--emerald);
+}
+
+.redDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--rose);
+}
+
+.controlsRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.searchBox {
+  position: relative;
+  flex: 1;
+  min-width: 240px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  height: 38px;
+  padding: 0 34px 0 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  color: var(--text-1);
+  background: var(--bg);
+  outline: none;
+  transition: all 0.18s ease;
+  font-family: inherit;
+}
+
+.searchInput:focus {
+  background: #ffffff;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.searchClear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.selectWrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filterLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filterSelect {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.filterSelect:focus {
+  background: #ffffff;
+  border-color: var(--border-focus);
+}
+
+.dateInput {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  font-family: inherit;
+}
+
+.dateInput:focus {
+  background: #ffffff;
+  border-color: var(--border-focus);
+}
+
+.clearDateBtn {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  width: 28px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.viewToggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-left: auto;
+}
+
+.viewBtn {
+  width: 38px;
+  height: 38px;
+  background: #ffffff;
+  border: none;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.viewBtnActive {
+  background: var(--indigo-bg);
+  color: var(--indigo);
+}
+
+/* ─── Table Card View ─── */
+.tableCard {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 13.5px;
+}
+
+.table th {
+  background: var(--bg-subtle);
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tr:hover {
+  background: #f8fafc;
+}
+
+.cancelledRow {
+  opacity: 0.72;
+  background: #fafafa;
+}
+
+.apptIdBadge {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-2);
+}
+
+.patientCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.patientAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--indigo) 0%, #3b82f6 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.patientName {
+  font-weight: 700;
+  color: var(--text-1);
+  font-size: 14px;
+}
+
+.patientMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+.dotSep {
+  color: var(--border);
+}
+
+.subtleId {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.doctorCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.docName {
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.specBadge {
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.physicianBadge {
+  background: var(--indigo-bg);
+  color: var(--indigo);
+  border: 1px solid var(--indigo-border);
+}
+
+.pediatricBadge {
+  background: var(--cyan-bg);
+  color: var(--cyan);
+  border: 1px solid var(--cyan-border);
+}
+
+.scheduleCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scheduleDate {
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.scheduleTime {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.statusBooked {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--emerald-bg);
+  border: 1px solid var(--emerald-border);
+  color: var(--emerald);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bookedDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--emerald);
+}
+
+.statusCancelled {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--rose-bg);
+  border: 1px solid var(--rose-border);
+  color: var(--rose);
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.cancelledDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--rose);
+}
+
+.cancelActionBtn {
+  padding: 6px 14px;
+  border: 1px solid var(--rose-border);
+  background: var(--rose-bg);
+  color: var(--rose);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancelActionBtn:hover:not(:disabled) {
+  background: var(--rose);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.cancelActionBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.slotFreedLabel {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-style: italic;
+}
+
+/* ─── Cards Grid View ─── */
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.cardCancelled {
+  opacity: 0.72;
+  background: #fafafa;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cardTimeBanner {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.timeMain {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-1);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.dateSub {
+  font-size: 12.5px;
+  color: var(--text-3);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.cardSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sectionLabel {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.7px;
+}
+
+.cardDocName {
+  font-weight: 700;
+  color: var(--text-1);
+  font-size: 14.5px;
+}
+
+.cardDocSpec {
+  font-size: 12px;
+  color: var(--indigo);
+  font-weight: 600;
+}
+
+.cardPatientName {
+  font-weight: 700;
+  color: var(--text-1);
+  font-size: 14px;
+}
+
+.cardPatientContact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+.cardFooter {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.cancelCardBtn {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--rose-border);
+  background: var(--rose-bg);
+  color: var(--rose);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancelCardBtn:hover:not(:disabled) {
+  background: var(--rose);
+  color: #ffffff;
+}
+
+.cardFreedNote {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-style: italic;
+}
+
+/* ─── Toast Alert ─── */
+.toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-radius: var(--radius);
+  background: #ffffff;
+  box-shadow: var(--shadow-lg);
+  font-size: 13.5px;
+  font-weight: 600;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.toastSuccess {
+  border: 1px solid var(--emerald-border);
+  color: var(--text-1);
+}
+
+.toastError {
+  border: 1px solid var(--rose-border);
+  color: var(--rose);
+}
+
+.toastClose {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+/* ─── Empty & Loading States ─── */
+.emptyState, .loadingState, .errorCard {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 60px 30px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.emptyIcon {
+  font-size: 44px;
+  margin-bottom: 14px;
+}
+
+.emptyTitle {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-1);
+  margin-bottom: 6px;
+}
+
+.emptyText {
+  font-size: 14px;
+  color: var(--text-3);
+  max-width: 440px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.emptyActions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.clearFiltersBtn {
+  padding: 9px 18px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-2);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clearFiltersBtn:hover {
+  background: #e2e8f0;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--indigo);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 14px;
+}
+
+.loadingText {
+  font-size: 14px;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.errorIcon {
+  font-size: 38px;
+  margin-bottom: 12px;
+}
+
+.errorTitle {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--rose);
+  margin-bottom: 6px;
+}
+
+.errorText {
+  font-size: 13.5px;
+  color: var(--text-3);
+  margin-bottom: 16px;
+}
+
+.retryBtn {
+  padding: 8px 18px;
+  border: none;
+  background: var(--indigo);
+  color: #ffffff;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 20px 16px;
+  }
+  .controlsRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .viewToggle {
+    margin-left: 0;
+  }
+}
