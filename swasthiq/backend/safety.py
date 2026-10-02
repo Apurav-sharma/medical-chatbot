@@ -106,10 +106,13 @@ def detect_prompt_injection(text: str) -> bool:
         r"\bdev\s+mode\b",
         r"\bcancel\s+every\b",
         r"\bdelete\s+all\b",
-        r"\b(list|show|export|reveal)\s+(me\s+)?(all|every)\s+(appointments|patients|records)\b",
+        # Appointment listings are handled through patient-verified lookup in
+        # the front-desk flow. Do not mistake "show all my appointments" for
+        # an attempt to expose everyone's records.
+        r"\b(list|show|export|reveal)\s+(me\s+)?(all|every)\s+(patients|records)\b",
         r"\bgive\s+me\s+access\b",
         r"\breveal\s+(your|the)\s+(prompt|instructions|system)\b",
-        r"\bshow\s+(me\s+)?(all|every)\s+(patient|appointment)\b",
+        r"\bshow\s+(me\s+)?(all|every)\s+patients\b",
     ]
     compiled = [re.compile(p, re.IGNORECASE) for p in injection_patterns]
     return any(p.search(text) for p in compiled)

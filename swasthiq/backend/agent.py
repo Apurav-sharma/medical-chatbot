@@ -280,6 +280,51 @@ _TOOLS = [
     )
 ]
 
+# In the interactive frontend, appointment mutations are submitted through the
+# validated forms. Keep the model's choices focused on understanding, lookup,
+# availability, and requesting the right form; it cannot accidentally mutate or
+# escalate an ordinary scheduling request.
+_UI_TOOL_NAMES = {"request_ui_form", "lookup_patient", "search_slots"}
+_UI_TOOLS = [
+    gtypes.Tool(function_declarations=[
+        declaration
+        for declaration in tool.function_declarations
+        if declaration.name in _UI_TOOL_NAMES
+    ])
+    for tool in _TOOLS
+]
+
+_UI_MODE_PROMPT = """\
+== INTERACTIVE FRONTEND MODE ==
+These rules override conflicting items in the general workflow guide below.
+Understand intent from the meaning and conversation context, not exact trigger words.
+For example, "drop the second appointment" means cancel the second appointment
+listed in the verified appointment results; "move it to next week" means reschedule.
+Answer the current request directly. Do not repeat the greeting or doctor directory
+unless the caller asks for it. Short replies such as "yes" must be interpreted in
+the context of the immediately preceding assistant question.
+
+Listing the caller's own appointments is allowed and is never a bulk or out-of-scope
+request. If the caller provides their name or phone, call lookup_patient and use the
+appointments returned with the patient record to answer. If identity is missing, ask
+for the full name and phone number. Never say you cannot list appointments.
+
+When the caller wants to book, cancel, or reschedule, call request_ui_form with the
+matching form_type. For cancellation or rescheduling, include appointment_id only
+when the caller's reference clearly maps to an ID in the earlier verified results
+or conversation. For references such as "the second one", use that ordering from
+the most recent appointment list. The frontend verifies identity, shows the matching
+appointment(s), requires an explicit appointment selection when there is ambiguity,
+and performs the operation only after form submission.
+
+In this mode, never call a direct booking, cancellation, or rescheduling mutation
+tool. The frontend's validated forms do that. Never call or claim to call a human
+handoff for ordinary scheduling requests, missing identity, or an appointment list.
+Ask for missing information or request the correct form instead. Only urgent
+clinical-safety events may trigger an automatic human handoff. Do not claim a form
+is open unless you called request_ui_form.
+"""
+
 # ---------------------------------------------------------------------------
 # System prompt — guides the LLM's decision-making
 # ---------------------------------------------------------------------------
@@ -767,7 +812,7 @@ def run_conversation(
         ) + "\n\n"
     user_message = (
         f"Today is {today} ({today_date.strftime('%A')}).\n"
-        + ("MODE: In-chat form workflow. When the caller first intends to book, reschedule, or cancel, call request_ui_form and stop before any appointment mutation. If the current caller message begins FORM_SUBMISSION:, continue the workflow and perform its validated operation; do not reopen the form. The booking form performs validated booking directly.\n" if ui_mode else "")
+        + ("MODE: Interactive forms own all appointment mutations. On booking, cancellation, or rescheduling intent, call request_ui_form; never process FORM_SUBMISSION in chat. The frontend forms perform validated operations.\n" if ui_mode else "")
         + f"{transcript_context}"
         + f"CURRENT CALLER MESSAGE (respond to this turn):\n{current_turn}"
     )
@@ -788,10 +833,10 @@ def run_conversation(
         )
 
     config = gtypes.GenerateContentConfig(
-        system_instruction=_SYSTEM_PROMPT,
+        system_instruction=_SYSTEM_PROMPT + ("\n" + _UI_MODE_PROMPT if ui_mode else ""),
         # Once safety has required an immediate handoff, or the user is trying
         # prompt injection, the model may write a natural reply but cannot act.
-        tools=[] if safety_result or (safety_signal and safety_signal["type"] == "prompt_injection") else _TOOLS,
+        tools=[] if safety_result or (safety_signal and safety_signal["type"] == "prompt_injection") else (_UI_TOOLS if ui_mode else _TOOLS),
         temperature=0,  # determinism
         automatic_function_calling=gtypes.AutomaticFunctionCallingConfig(disable=True),
     )

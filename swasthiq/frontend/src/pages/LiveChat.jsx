@@ -343,9 +343,23 @@ function SuccessCard({ doctorName, date, slot, patientName, apptId, onDone }) {
 }
 
 // ─── CancelConfirmCard ────────────────────────────────────────
-function AppointmentIdentityForm({ title, onSubmit, busy, error }) {
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
+function AppointmentIdentityForm({ title, prefill, onSubmit, busy, error }) {
+  const [name, setName] = useState(prefill?.name || '')
+  const [phone, setPhone] = useState(prefill?.phone || '')
+  const autoLookupKey = useRef('')
+
+  useEffect(() => {
+    if (prefill?.name) setName(current => current || prefill.name)
+    if (prefill?.phone) setPhone(current => current || prefill.phone)
+
+    const fullName = prefill?.name?.trim()
+    const cleanPhone = (prefill?.phone || '').replace(/\D/g, '').slice(-10)
+    const lookupKey = `${fullName?.toLowerCase() || ''}:${cleanPhone}`
+    if (fullName && cleanPhone.length === 10 && autoLookupKey.current !== lookupKey) {
+      autoLookupKey.current = lookupKey
+      onSubmit({ name: fullName, phone: cleanPhone })
+    }
+  }, [prefill?.name, prefill?.phone, onSubmit])
   return (
     <form className={styles.appointmentCard} onSubmit={e => { e.preventDefault(); onSubmit({ name: name.trim(), phone: phone.replace(/\D/g, '').slice(-10) }) }}>
       <div className={styles.appointmentCardHeader}><div><div className={styles.appointmentCardTitle}>{title}</div><div className={styles.appointmentCardSub}>Enter the patient’s full name and phone number.</div></div></div>
@@ -475,12 +489,14 @@ export default function LiveChat() {
   const [cancelIdentity,      setCancelIdentity]      = useState(null)
   const [cancelAppointments,   setCancelAppointments]   = useState([])
   const [selectedCancelId,    setSelectedCancelId]     = useState('')
+  const [requestedCancelId,   setRequestedCancelId]    = useState('')
   const [cancelLookupBusy,    setCancelLookupBusy]     = useState(false)
   const [cancelLookupError,   setCancelLookupError]   = useState('')
   const [showRescheduleIdentity, setShowRescheduleIdentity] = useState(false)
   const [rescheduleIdentity,  setRescheduleIdentity]  = useState(null)
   const [rescheduleAppointments, setRescheduleAppointments] = useState([])
   const [selectedRescheduleId, setSelectedRescheduleId] = useState('')
+  const [requestedRescheduleId, setRequestedRescheduleId] = useState('')
   const [rescheduleLookupBusy, setRescheduleLookupBusy] = useState(false)
   const [rescheduleLookupError, setRescheduleLookupError] = useState('')
   const [rescheduleBusy,     setRescheduleBusy]        = useState(false)
@@ -551,18 +567,24 @@ export default function LiveChat() {
       // The agent may refer back to a form in a follow-up without repeating its
       // patient lookup. Reuse the previously verified appointment list so that
       // the requested confirmation card is actually present in the chat.
-      const latestCallerTurn = (allTurns.at(-1) || '').toLowerCase()
-      const namesCancellationForm = /cancellation form|cancel(?:lation)? form/i.test(resp.reply || '')
-      if (action?.type === 'open_cancel' || namesCancellationForm) setShowCancelIdentity(true)
-      if (action?.type === 'open_reschedule' || /reschedule form/i.test(resp.reply || '')) setShowRescheduleIdentity(true)
-
       if (action?.type === 'open_booking') {
         setBookDoctor(action.doctor_id || 'dr_rao')
         setShowBooking(true)
       } else if (action?.type === 'open_cancel') {
         setShowBooking(false)
+        setShowRescheduleIdentity(false)
+        setShowReschedule(false)
+        setRequestedCancelId(action.appointment_id || '')
+        setCancelAppointments([])
+        setSelectedCancelId('')
+        setCancelIdentity(null)
+        setShowCancelIdentity(true)
       } else if (action?.type === 'open_reschedule') {
         setShowBooking(false)
+        setShowCancelIdentity(false)
+        setCancelAppointments([])
+        setShowReschedule(false)
+        setRequestedRescheduleId(action.appointment_id || '')
         setShowRescheduleIdentity(true)
       }
 
@@ -582,36 +604,6 @@ export default function LiveChat() {
     setTurns(next)
     setInput('')
     push({ type: 'caller', text: t })
-
-    if (/\b(cancel|cancellation|cancel my|cancel the|hatao|radd)\b/i.test(t)) {
-      setShowRescheduleIdentity(false)
-      setShowReschedule(false)
-      setRescheduleAppointments([])
-      setRescheduleTarget(null)
-      setCancelAppointments([])
-      setSelectedCancelId('')
-      setCancelIdentity(null)
-      setCancelLookupError('')
-      setShowCancelIdentity(true)
-      push({ type: 'agent', text: 'I can help cancel an appointment. Please enter the patient’s full name and phone number below so I can find the active appointments.' })
-      return
-    }
-
-    if (/\b(reschedule|rescheduling|change my appointment|move (?:my )?appointment|postpone my appointment)\b/i.test(t)) {
-      setShowCancelIdentity(false)
-      setCancelAppointments([])
-      setCancelIdentity(null)
-      setRescheduleAppointments([])
-      setSelectedRescheduleId('')
-      setRescheduleIdentity(null)
-      setRescheduleLookupError('')
-      setRescheduleError('')
-      setRescheduleTarget(null)
-      setShowReschedule(false)
-      setShowRescheduleIdentity(true)
-      push({ type: 'agent', text: 'I can help reschedule an appointment. Please enter the patient’s full name and phone number below so I can find the active appointments.' })
-      return
-    }
 
     await runAgent(next, priorAssistantReplies)
   }
@@ -675,7 +667,9 @@ export default function LiveChat() {
       }
       setRescheduleIdentity(identity)
       setRescheduleAppointments(result.appointments)
-      setSelectedRescheduleId(result.appointments.length === 1 ? result.appointments[0].id : '')
+      const requested = result.appointments.find(item => item.id === requestedRescheduleId)
+      setSelectedRescheduleId(requested?.id || (result.appointments.length === 1 ? result.appointments[0].id : ''))
+      setRequestedRescheduleId('')
       appointmentsRef.current = result.appointments
       setShowRescheduleIdentity(false)
       push({ type: 'agent', text: result.appointments.length === 1
@@ -737,7 +731,9 @@ export default function LiveChat() {
       setCancelIdentity(identity)
       setCancelAppointments(result.appointments)
       appointmentsRef.current = result.appointments
-      setSelectedCancelId(result.appointments.length === 1 ? result.appointments[0].id : '')
+      const requested = result.appointments.find(item => item.id === requestedCancelId)
+      setSelectedCancelId(requested?.id || (result.appointments.length === 1 ? result.appointments[0].id : ''))
+      setRequestedCancelId('')
       setShowCancelIdentity(false)
       push({ type: 'agent', text: result.appointments.length === 1
         ? 'I found one active appointment. Select it below and confirm the cancellation.'
@@ -770,6 +766,7 @@ export default function LiveChat() {
     setCancelAppointments([])
     setCancelIdentity(null)
     setSelectedCancelId('')
+    setRequestedCancelId('')
     setCancelLookupError('')
     push({ type: 'agent', text: 'Understood. I left your appointments unchanged.' })
   }
@@ -896,7 +893,7 @@ export default function LiveChat() {
                 )}
 
                 {showCancelIdentity && (
-                  <AppointmentIdentityForm title="Find appointments to cancel" onSubmit={handleCancellationLookup} busy={cancelLookupBusy} error={cancelLookupError} />
+                  <AppointmentIdentityForm title="Find appointments to cancel" prefill={prefill} onSubmit={handleCancellationLookup} busy={cancelLookupBusy} error={cancelLookupError} />
                 )}
                 {cancelAppointments.length > 0 && (
                   <CancelConfirmCard
@@ -908,7 +905,7 @@ export default function LiveChat() {
                     busy={cancelBusy}
                   />
                 )}
-                {showRescheduleIdentity && <AppointmentIdentityForm title="Find appointments to reschedule" onSubmit={handleRescheduleLookup} busy={rescheduleLookupBusy} error={rescheduleLookupError} />}
+                {showRescheduleIdentity && <AppointmentIdentityForm title="Find appointments to reschedule" prefill={prefill} onSubmit={handleRescheduleLookup} busy={rescheduleLookupBusy} error={rescheduleLookupError} />}
                 {rescheduleAppointments.length > 0 && !showReschedule && (
                   <RescheduleAppointmentPicker appointments={rescheduleAppointments} selectedId={selectedRescheduleId} onSelect={setSelectedRescheduleId} onContinue={chooseRescheduleAppointment} />
                 )}
