@@ -21,7 +21,8 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
+import re
 
 # Load .env before importing agent (which reads GEMINI_API_KEY)
 load_dotenv()
@@ -99,6 +100,8 @@ class AgentRunRequest(BaseModel):
     conversation_id: str
     today: str
     turns: list[str]
+    assistant_replies: list[str] = Field(default_factory=list)
+    ui_mode: bool = False
 
     @field_validator("today")
     @classmethod
@@ -124,6 +127,86 @@ class AgentRunRequest(BaseModel):
         return v.strip()
 
 
+class AppointmentConfirmRequest(BaseModel):
+    conversation_id: str = "live_booking"
+    doctor_id: str
+    date: str
+    slot: str
+    name: str
+    phone: str
+    for_self: bool = True
+    patient_name: str | None = None
+    relationship: str | None = None
+
+    @field_validator("date")
+    @classmethod
+    def validate_date(cls, v: str) -> str:
+        try:
+            datetime.date.fromisoformat(v)
+        except ValueError:
+            raise ValueError(f"date must be YYYY-MM-DD, got '{v}'")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        clean = v.strip()
+        if not clean:
+            raise ValueError("Name is required")
+        return clean
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        digits = re.sub(r"\D", "", v)
+        if len(digits) < 10:
+            raise ValueError("Phone number must have at least 10 digits")
+        return digits[-10:]
+
+
+class AppointmentRescheduleRequest(BaseModel):
+    conversation_id: str = "live_reschedule"
+    new_date: str
+    new_start: str
+
+    @field_validator("new_date")
+    @classmethod
+    def validate_date(cls, v: str) -> str:
+        try:
+            datetime.date.fromisoformat(v)
+        except ValueError:
+            raise ValueError(f"new_date must be YYYY-MM-DD, got '{v}'")
+        return v
+
+    @field_validator("new_start")
+    @classmethod
+    def validate_start(cls, v: str) -> str:
+        clean = v.strip()
+        if not re.match(r"^\d{1,2}:\d{2}$", clean):
+            raise ValueError(f"new_start must be HH:MM, got '{v}'")
+        return clean
+
+
+class CancellationIdentityRequest(BaseModel):
+    name: str
+    phone: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Full name is required")
+        return value.strip()
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        digits = re.sub(r"\D", "", value)
+        if len(digits) < 10:
+            raise ValueError("Phone number must have at least 10 digits")
+        return digits[-10:]
+
+
 # ---------------------------------------------------------------------------
 # Main evaluation endpoint
 # ---------------------------------------------------------------------------
@@ -138,6 +221,8 @@ async def agent_run(request: AgentRunRequest) -> dict:
         conversation_id=request.conversation_id,
         today=request.today,
         turns=request.turns,
+        assistant_replies=request.assistant_replies,
+        ui_mode=request.ui_mode,
     )
 
     # Persist conversation result for frontend
@@ -419,9 +504,211 @@ async def cancel_appointment_api(appointment_id: str) -> dict:
     return res
 
 
+@app.post("/api/cancellations/lookup")
+async def cancellation_lookup(req: CancellationIdentityRequest) -> dict:
+    """Resolve caller identity, then return active appointments they may cancel."""
+    import tools
+    conn = build_db(in_memory=False)
+    match = tools.lookup_patient(conn, name=req.name, phone=req.phone)
+    if match.get("status") != "found":
+        return {"status": match.get("status", "not_found"), "message": match.get("message"),
+                "candidates": match.get("candidates", [])}
+
+    patient_id = match["patient"]["id"]
+    ward_rows = conn.execute("SELECT ward_id FROM guardians WHERE guardian_id=?", (patient_id,)).fetchall()
+    allowed_patient_ids = [patient_id, *(row["ward_id"] for row in ward_rows)]
+    placeholders = ",".join("?" for _ in allowed_patient_ids)
+    rows = conn.execute(
+        f"""SELECT a.id, a.patient_id, a.date, a.start_time, a.end_time,
+                   p.name AS patient_name, d.name AS doctor_name
+            FROM appointments a
+            JOIN patients p ON p.id=a.patient_id
+            JOIN doctors d ON d.id=a.doctor_id
+            WHERE a.status='booked' AND a.patient_id IN ({placeholders})
+            ORDER BY a.date, a.start_time""",
+        allowed_patient_ids,
+    ).fetchall()
+    return {"status": "ok", "patient": match["patient"], "appointments": [dict(row) for row in rows]}
+
+
+@app.post("/api/cancellations/{appointment_id}/confirm")
+async def confirm_cancellation(appointment_id: str, req: CancellationIdentityRequest) -> dict:
+    """Cancel only after re-verifying the caller and appointment ownership."""
+    import tools
+    conn = build_db(in_memory=False)
+    match = tools.lookup_patient(conn, name=req.name, phone=req.phone)
+    if match.get("status") != "found":
+        raise HTTPException(status_code=403, detail="Could not verify the patient. Check the name and phone number.")
+
+    caller_id = match["patient"]["id"]
+    appointment = conn.execute("SELECT patient_id FROM appointments WHERE id=?", (appointment_id,)).fetchone()
+    wards = {row["ward_id"] for row in conn.execute("SELECT ward_id FROM guardians WHERE guardian_id=?", (caller_id,)).fetchall()}
+    if not appointment or (appointment["patient_id"] != caller_id and appointment["patient_id"] not in wards):
+        raise HTTPException(status_code=403, detail="This appointment is not linked to the verified patient or their listed ward.")
+
+    result = tools.cancel_appointment(conn, appointment_id=appointment_id)
+    if result.get("status") != "ok":
+        raise HTTPException(status_code=400, detail=result.get("message", "Cancellation failed."))
+    return result
+
+
+@app.get("/api/slots")
+async def get_slots(doctor_id: str, date: str) -> dict:
+    """
+    Read-only slot availability check used by the frontend SlotSelector.
+    Safe to call multiple times — does not mutate any data.
+    Returns the same structure as search_slots tool.
+    """
+    import tools
+    conn = build_db(in_memory=False)
+    result = tools.search_slots(conn, doctor_id=doctor_id, date=date)
+    return result
+
+
 @app.get("/api/doctors")
 async def list_doctors() -> dict:
     """Return list of clinic doctors."""
     conn = build_db(in_memory=False)
     rows = conn.execute("SELECT id, name, speciality FROM doctors ORDER BY name").fetchall()
     return {"doctors": [dict(r) for r in rows]}
+
+
+@app.post("/api/appointments/confirm")
+async def confirm_appointment(req: AppointmentConfirmRequest) -> dict:
+    """
+    Authoritative backend validation & atomic booking transaction.
+    1. Validates request schema with Pydantic.
+    2. Validates doctor exists.
+    3. Validates clinic holidays and doctor leaves.
+    4. Re-checks slot availability atomically (race condition guard).
+    5. Resolves or registers patient in clinic DB.
+    6. Books appointment atomically with SQLite UNIQUE constraint protection.
+    7. Returns authoritative booking result.
+    """
+    import tools
+    conn = build_db(in_memory=False)
+
+    # 1. Doctor check
+    doc = conn.execute("SELECT id, name, speciality FROM doctors WHERE id=?", (req.doctor_id,)).fetchone()
+    if not doc:
+        raise HTTPException(status_code=400, detail=f"Doctor '{req.doctor_id}' does not exist.")
+
+    # 2. Holiday check
+    if tools._is_holiday(conn, req.date):
+        raise HTTPException(status_code=400, detail=f"The clinic is closed on {req.date} (public holiday).")
+
+    # 3. Doctor leave check
+    if tools._is_doctor_on_leave(conn, req.doctor_id, req.date):
+        raise HTTPException(status_code=400, detail=f"{doc['name']} is on leave on {req.date}.")
+
+    # 4. Slot availability check (authoritative race condition guard)
+    slot_res = tools.search_slots(conn, doctor_id=req.doctor_id, date=req.date)
+    if slot_res.get("status") != "ok":
+        raise HTTPException(status_code=400, detail=slot_res.get("message", "Slot check failed."))
+
+    avail_slots = slot_res.get("slots", [])
+    if req.slot not in avail_slots:
+        return {
+            "status": "error",
+            "code": "slot_unavailable",
+            "message": f"Slot {req.slot} is no longer available for {doc['name']} on {req.date}. Please select another time.",
+            "available_slots": avail_slots,
+        }
+
+    # 5. Resolve or register patient
+    target_name = req.name if req.for_self else (req.patient_name or req.name)
+    target_phone = req.phone
+
+    lp = tools.lookup_patient(conn, name=target_name, phone=target_phone)
+    if lp.get("status") == "found":
+        patient_id = lp["patient"]["id"]
+    else:
+        reg = tools.register_patient(conn, name=target_name, phone=target_phone)
+        if reg.get("status") == "ok":
+            patient_id = reg["patient"]["id"]
+        else:
+            row = conn.execute(
+                "SELECT id FROM patients WHERE REPLACE(REPLACE(phone,' ',''),'-','') = ?",
+                (target_phone,),
+            ).fetchone()
+            patient_id = row["id"] if row else "pt_new"
+
+    # 6. Book appointment atomically
+    bk = tools.book_appointment(
+        conn,
+        patient_id=patient_id,
+        doctor_id=req.doctor_id,
+        date=req.date,
+        start=req.slot,
+    )
+
+    if bk.get("status") != "ok":
+        raise HTTPException(status_code=400, detail=bk.get("message", "Failed to book appointment."))
+
+    appt_id = bk.get("appointment_id", "")
+
+    # Persist in conversation results if conversation_id provided
+    if _handoffs_conn and req.conversation_id:
+        result_record = {
+            "conversation_id": req.conversation_id,
+            "terminal_state": "booked",
+            "escalation_reason": None,
+            "patient_id": patient_id,
+            "appointment_id": appt_id,
+            "tool_calls": [
+                {"name": "search_slots", "arguments": {"doctor_id": req.doctor_id, "date": req.date}},
+                {"name": "lookup_patient", "arguments": {"name": target_name, "phone": target_phone}},
+                {"name": "book_appointment", "arguments": {"patient_id": patient_id, "doctor_id": req.doctor_id, "date": req.date, "start": req.slot}},
+            ],
+            "reply": f"Your appointment with {doc['name']} on {req.date} at {req.slot} is confirmed. Appointment ID: {appt_id}.",
+        }
+        _persist_result(result_record)
+
+    return {
+        "status": "ok",
+        "appointment_id": appt_id,
+        "doctor_id": req.doctor_id,
+        "doctor_name": doc["name"],
+        "date": req.date,
+        "slot": req.slot,
+        "patient_name": target_name,
+        "patient_phone": target_phone,
+        "message": f"Your appointment with {doc['name']} on {req.date} at {req.slot} is confirmed.",
+    }
+
+
+@app.post("/api/appointments/{appointment_id}/reschedule")
+async def reschedule_appointment_api(appointment_id: str, req: AppointmentRescheduleRequest) -> dict:
+    """
+    Atomically reschedule an appointment to a new date and time.
+    """
+    import tools
+    conn = build_db(in_memory=False)
+    res = tools.reschedule_appointment(
+        conn,
+        appointment_id=appointment_id,
+        new_date=req.new_date,
+        new_start=req.new_start,
+    )
+    if res.get("status") == "error":
+        raise HTTPException(status_code=400, detail=res.get("message", "Reschedule failed"))
+
+    # Log in conversation results if conversation_id provided
+    if _handoffs_conn and req.conversation_id:
+        doc = conn.execute("SELECT name FROM doctors WHERE id=?", (res.get("doctor_id", ""),)).fetchone()
+        doc_name = doc["name"] if doc else "the doctor"
+        result_record = {
+            "conversation_id": req.conversation_id,
+            "terminal_state": "rescheduled",
+            "escalation_reason": None,
+            "patient_id": res.get("patient_id"),
+            "appointment_id": appointment_id,
+            "tool_calls": [
+                {"name": "search_slots", "arguments": {"doctor_id": res.get("doctor_id"), "date": req.new_date}},
+                {"name": "reschedule_appointment", "arguments": {"appointment_id": appointment_id, "new_date": req.new_date, "new_start": req.new_start}},
+            ],
+            "reply": f"Your appointment has been successfully rescheduled to {req.new_date} at {req.new_start} with {doc_name}.",
+        }
+        _persist_result(result_record)
+
+    return res

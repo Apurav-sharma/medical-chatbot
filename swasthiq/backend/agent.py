@@ -31,6 +31,7 @@ from __future__ import annotations
 import datetime
 import os
 import pathlib
+import re
 import sqlite3
 import threading
 import time
@@ -87,6 +88,23 @@ def _generate_content(client, *, model: str, contents, config):
 _TOOLS = [
     gtypes.Tool(
         function_declarations=[
+            gtypes.FunctionDeclaration(
+                name="request_ui_form",
+                description=(
+                    "Tell the chat frontend which structured appointment form to show after understanding caller intent. "
+                    "Use for booking, rescheduling, or cancellation when required conversational details are clear enough "
+                    "to collect or confirm in a form. This does not change appointment data."
+                ),
+                parameters=gtypes.Schema(
+                    type=gtypes.Type.OBJECT,
+                    properties={
+                        "form_type": gtypes.Schema(type=gtypes.Type.STRING, description="booking, reschedule, or cancellation"),
+                        "doctor_id": gtypes.Schema(type=gtypes.Type.STRING, description="For booking: dr_rao or dr_sethi; otherwise omit"),
+                        "appointment_id": gtypes.Schema(type=gtypes.Type.STRING, description="For reschedule/cancellation when known"),
+                    },
+                    required=["form_type"],
+                ),
+            ),
             gtypes.FunctionDeclaration(
                 name="search_slots",
                 description="Find available appointment slots for a doctor on a specific date.",
@@ -175,7 +193,11 @@ _TOOLS = [
                     "status='ambiguous' with all candidates for multiple matches, "
                     "or status='not_found'. Never guesses — always returns all candidates. "
                     "For a guardian booking, look up the GUARDIAN's own name and phone, "
-                    "not just the child's shared family phone."
+                    "not just the child's shared family phone. "
+                    "CRITICAL: At least one of 'name', 'phone', or 'dob' is strictly required. "
+                    "NEVER call this tool with empty arguments {} or when the caller has not yet provided "
+                    "any identifying details. If the caller has not shared their name or phone, "
+                    "ask them conversationally first."
                 ),
                 parameters=gtypes.Schema(
                     type=gtypes.Type.OBJECT,
@@ -274,6 +296,25 @@ You MUST ALWAYS reply in the EXACT language used by the caller in their messages
 - If the caller speaks in Hinglish (mixed Hindi-English), respond in natural Hinglish.
 - Maintain the caller's chosen language consistently across all turns.
 
+== CURRENT TURN FOCUS ==
+The request contains the full conversation for context. Treat the final numbered
+turn as the caller's current message and respond to that message only. Use earlier
+turns to understand intent, remember details the caller already gave, and continue
+an unfinished workflow; do not repeat earlier greetings, explanations, or questions
+that have already been answered. Keep follow-up replies concise and ask only for the
+next missing detail needed to complete the current task. Do not list doctors or
+restate clinic details unless the caller asks, or a doctor choice is needed now.
+When a reschedule is in progress and the caller's identity and existing appointment
+are already established, ask only for the preferred new date/time (or proceed with
+the one they just supplied). Never restart the workflow or ask for identity again
+when the transcript already contains the required information.
+If the caller's latest reply is an affirmative (for example, "yes") to your
+immediately preceding offer to book or to proceed with the next step, treat it as
+consent and advance that workflow. Do not repeat the offer. If the doctor is known
+but required booking details are missing, ask only for the next one or two details
+(usually date/time and name/phone), or invoke the booking workflow as appropriate.
+Do not ask "Would you like to book?" again after the caller has agreed.
+
 == CLINIC DOCTORS & SPECIALITIES ==
 Sunrise Clinic ONLY has two doctors:
 1. Dr. Anjali Rao (General Physician / Internal Medicine) [ID: dr_rao]
@@ -335,6 +376,12 @@ reschedule requests. Escalate only when genuinely needed.
 
 == WORKFLOW GUIDE ==
 
+When you determine that the caller wants to start a booking, reschedule, or
+cancellation, call request_ui_form with the matching form_type. Use the prior
+assistant replies supplied in context to interpret short answers such as "yes".
+The form tool only opens a form; it never changes appointment data. Do not claim
+the action is complete until the corresponding validated submission succeeds.
+
 For BOOKING:
   1. Search requested doctor/date slots (pick dr_rao if caller asks for 'any doctor' or does not specify).
   2. lookup_patient using the caller's name and phone number.
@@ -349,18 +396,20 @@ For BOOKING:
   not book; finish without action after any requested availability lookup.
 
 For RESCHEDULING:
-  1. lookup_patient to identify caller and find their existing appointment.
+  1. If caller name or phone is not yet provided, politely ask for their full name and phone number (or appointment ID) first. NEVER call lookup_patient without caller details!
+  2. lookup_patient to identify caller and find their existing appointment.
      (Their appointments are included in the lookup result.)
-  2. search_slots for the new date.
-  3. reschedule_appointment with the existing appointment ID, new date, and new start time.
+  3. search_slots for the new date.
+  4. reschedule_appointment with the existing appointment ID, new date, and new start time.
      This updates the appointment in the database!
-  4. Confirm the updated date and time to the caller in their language.
+  5. Confirm the updated date and time to the caller in their language.
 
 For CANCELLATION:
-  1. lookup_patient to identify caller and find their appointment.
-  2. cancel_appointment with the appointment ID.
+  1. If caller name or phone is not yet provided, politely ask for their full name and phone number (or appointment ID) first. NEVER call lookup_patient without caller details!
+  2. Once identifying details are provided, lookup_patient to identify caller and find their appointment.
+  3. cancel_appointment with the appointment ID.
      This cancels the booking and frees the slot in the database!
-  3. Confirm the cancellation to the caller in their language.
+  4. Confirm the cancellation to the caller in their language.
 
 For GUARDIAN BOOKINGS (e.g., mother booking for child):
   1. Identify the named guardian from all caller turns. lookup_patient for the
@@ -399,7 +448,14 @@ def _dispatch_tool(
     Returns a structured result — never raises.
     """
     try:
-        if name == "search_slots":
+        if name == "request_ui_form":
+            form_type = str(args.get("form_type", ""))
+            if form_type not in {"booking", "reschedule", "cancellation"}:
+                return {"status": "error", "message": "Unsupported form type."}
+            return {"status": "ok", "form_type": form_type,
+                    "doctor_id": args.get("doctor_id"),
+                    "appointment_id": args.get("appointment_id")}
+        elif name == "search_slots":
             return tool_fns.search_slots(
                 conn,
                 doctor_id=str(args.get("doctor_id", "")),
@@ -482,6 +538,12 @@ def _dispatch_tool(
             )
 
         elif name == "lookup_patient":
+            if not args.get("name") and not args.get("phone") and not args.get("dob"):
+                return {
+                    "status": "error",
+                    "code": "no_criteria",
+                    "message": "Cannot lookup patient without name, phone, or dob. Ask the caller for their name and phone number first.",
+                }
             result = tool_fns.lookup_patient(
                 conn,
                 name=args.get("name"),
@@ -584,6 +646,66 @@ def _extract_outcome(tool_calls_log: list[dict]) -> dict:
     }
 
 
+def _handle_confirmed_ui_submission(
+    *, conversation_id: str, today: str, turns: list[str], conn: sqlite3.Connection,
+) -> dict | None:
+    """Re-verify identity and execute a form-confirmed mutation deterministically."""
+    if not turns or not turns[-1].startswith("FORM_SUBMISSION:"):
+        return None
+
+    current = turns[-1]
+    phone_candidates = re.findall(r"(?<!\d)(\d{10})(?!\d)", " ".join(turns[:-1]))
+    if not phone_candidates:
+        return None
+
+    authorization = {"caller_id": None, "ward_ids": set()}
+    lookup = _dispatch_tool(
+        "lookup_patient", {"phone": phone_candidates[-1]}, conn, conversation_id, authorization,
+    )
+    if lookup.get("status") != "found":
+        return None
+
+    tool_calls = [{"name": "lookup_patient", "arguments": {"phone": phone_candidates[-1]}}]
+    match = re.search(r"appointment\s+(ap_[A-Za-z0-9_-]+)", current, re.IGNORECASE)
+    if not match:
+        return None
+    appointment_id = match.group(1)
+
+    if re.search(r"confirmed cancellation", current, re.IGNORECASE):
+        tool_name = "cancel_appointment"
+        args = {"appointment_id": appointment_id}
+    else:
+        date_match = re.search(r"\bto\s+(\d{4}-\d{2}-\d{2})\s+at\s+(\d{1,2}:\d{2})", current)
+        if not date_match:
+            return None
+        tool_name = "reschedule_appointment"
+        args = {"appointment_id": appointment_id, "new_date": date_match.group(1), "new_start": date_match.group(2)}
+
+    result = _dispatch_tool(tool_name, args, conn, conversation_id, authorization)
+    tool_calls.append({"name": tool_name, "arguments": args})
+    if result.get("status") != "ok":
+        return {
+            "conversation_id": conversation_id, "tool_calls": tool_calls,
+            "terminal_state": "abandoned", "escalation_reason": None,
+            "patient_id": authorization["caller_id"], "appointment_id": appointment_id,
+            "ui_action": None, "reply": result.get("message", "I couldn't update that appointment. Please check the details and try again."),
+            "metrics": {"turns": len(turns), "tokens": 0, "latency_ms": 0},
+        }
+
+    terminal_state = "cancelled" if tool_name == "cancel_appointment" else "rescheduled"
+    if terminal_state == "cancelled":
+        reply = f"Your appointment {appointment_id} has been cancelled."
+    else:
+        reply = f"Your appointment {appointment_id} has been rescheduled to {args['new_date']} at {args['new_start']}."
+    return {
+        "conversation_id": conversation_id, "tool_calls": tool_calls,
+        "terminal_state": terminal_state, "escalation_reason": None,
+        "patient_id": authorization["caller_id"], "appointment_id": appointment_id,
+        "ui_action": {"type": "cancel_complete" if terminal_state == "cancelled" else "reschedule_complete"},
+        "reply": reply, "metrics": {"turns": len(turns), "tokens": 0, "latency_ms": 0},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Main agent entrypoint
 # ---------------------------------------------------------------------------
@@ -592,6 +714,8 @@ def run_conversation(
     conversation_id: str,
     today: str,
     turns: list[str],
+    assistant_replies: list[str] | None = None,
+    ui_mode: bool = False,
 ) -> dict:
     """
     Process a full conversation and return the structured response (schema.md).
@@ -614,6 +738,13 @@ def run_conversation(
     except ValueError:
         today_date = datetime.date(2026, 10, 1)
 
+    if is_live and ui_mode:
+        submission_result = _handle_confirmed_ui_submission(
+            conversation_id=conversation_id, today=today, turns=turns, conn=conn,
+        )
+        if submission_result is not None:
+            return submission_result
+
     api_key = _get_api_key()
     if not api_key:
         raise ValueError(
@@ -621,14 +752,24 @@ def run_conversation(
             "Create backend/.env with: GEMINI_API_KEY=your_key_here"
         )
 
-    # Build the user message: all turns in sequence
+    assistant_replies = assistant_replies or []
+    # Keep the transcript available for continuity, while marking the current
+    # caller turn explicitly so earlier turns are treated as context, not a prompt
+    # to replay previous answers.
     turns_text = "\n".join(
-        f"[Turn {i + 1}] {t}" for i, t in enumerate(turns)
+        f"[Turn {i + 1}] {t}" for i, t in enumerate(turns[:-1])
     )
+    current_turn = turns[-1] if turns else ""
+    transcript_context = f"Earlier caller turns (context only):\n{turns_text}\n" if turns_text else ""
+    if assistant_replies:
+        transcript_context += "Earlier assistant replies in order (context only):\n" + "\n".join(
+            f"[Assistant {i + 1}] {reply}" for i, reply in enumerate(assistant_replies)
+        ) + "\n\n"
     user_message = (
-        f"Today is {today} ({today_date.strftime('%A')}). "
-        f"Process this caller conversation according to your guidelines.\n\n"
-        f"{turns_text}"
+        f"Today is {today} ({today_date.strftime('%A')}).\n"
+        + ("MODE: In-chat form workflow. When the caller first intends to book, reschedule, or cancel, call request_ui_form and stop before any appointment mutation. If the current caller message begins FORM_SUBMISSION:, continue the workflow and perform its validated operation; do not reopen the form. The booking form performs validated booking directly.\n" if ui_mode else "")
+        + f"{transcript_context}"
+        + f"CURRENT CALLER MESSAGE (respond to this turn):\n{current_turn}"
     )
 
     # Configure LLM
@@ -765,9 +906,31 @@ def run_conversation(
     # Derive structured outcome from tool call history
     outcome = _extract_outcome(tool_calls_log)
 
+    # Frontend presentation is driven only by the LLM's explicit form request.
+    ui_action = None
+    if outcome["terminal_state"] == "booked":
+        ui_action = {"type": "booking_complete"}
+    elif outcome["terminal_state"] == "rescheduled":
+        ui_action = {"type": "reschedule_complete"}
+    elif outcome["terminal_state"] == "cancelled":
+        ui_action = {"type": "cancel_complete"}
+    elif outcome["terminal_state"] == "escalated":
+        ui_action = {"type": "handoff", "reason": outcome["escalation_reason"]}
+    else:
+        form_call = next((entry for entry in tool_calls_log if entry["name"] == "request_ui_form" and entry["result"].get("status") == "ok"), None)
+        if form_call:
+            form_args = form_call["result"]
+            form_kind = form_args["form_type"]
+            ui_action = {
+                "type": {"booking": "open_booking", "reschedule": "open_reschedule", "cancellation": "open_cancel"}[form_kind],
+                "doctor_id": form_args.get("doctor_id"),
+                "appointment_id": form_args.get("appointment_id"),
+            }
+
     if safety_signal and safety_signal["type"] == "prompt_injection":
         outcome["terminal_state"] = "refused"
         outcome["escalation_reason"] = None
+        ui_action = None
 
     # Default terminal state for conversations with no definitive outcome
     if outcome["terminal_state"] is None:
@@ -789,6 +952,7 @@ def run_conversation(
         "escalation_reason": outcome["escalation_reason"],
         "patient_id": outcome["patient_id"],
         "appointment_id": outcome["appointment_id"],
+        "ui_action": ui_action,
         "reply": final_reply,
         "metrics": {
             "turns": len(turns),

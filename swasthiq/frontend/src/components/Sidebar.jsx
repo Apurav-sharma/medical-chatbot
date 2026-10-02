@@ -5,10 +5,10 @@ import styles from './Sidebar.module.css'
 
 const Logo = () => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-    <rect width="24" height="24" rx="6" fill="url(#brandGrad)" />
+    <rect width="24" height="24" rx="6" fill="url(#bg)" />
     <path d="M12 6v12M6 12h12" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
     <defs>
-      <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#4f46e5" />
         <stop offset="100%" stopColor="#0ea5e9" />
       </linearGradient>
@@ -19,8 +19,6 @@ const Logo = () => (
 const IconChat = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    <path d="M8 9h8" />
-    <path d="M8 13h5" />
   </svg>
 )
 
@@ -51,30 +49,25 @@ const IconCalendar = () => (
 )
 
 export default function Sidebar() {
-  const [online, setOnline] = useState(null)
-  const [openCount, setOpenCount] = useState(0)
-  const [apptCount, setApptCount] = useState(0)
+  const [online,     setOnline]     = useState(null)
+  const [openCount,  setOpenCount]  = useState(0)
+  const [apptCount,  setApptCount]  = useState(0)
 
   useEffect(() => {
     const checkHealth = async () => {
-      try {
-        await api.health()
-        setOnline(true)
-      } catch {
-        setOnline(false)
-      }
+      try { await api.health(); setOnline(true) } catch { setOnline(false) }
     }
     checkHealth()
     const t1 = setInterval(checkHealth, 15000)
 
     const loadCounts = async () => {
       try {
-        const [handoffData, apptData] = await Promise.all([
+        const [hd, ad] = await Promise.all([
           api.handoffs().catch(() => ({})),
           api.appointments({ status: 'booked' }).catch(() => ({})),
         ])
-        setOpenCount((handoffData.counts || {}).open || 0)
-        setApptCount((apptData.counts || {}).booked || 0)
+        setOpenCount((hd.counts || {}).open || 0)
+        setApptCount((ad.counts || {}).booked || 0)
       } catch {}
     }
     loadCounts()
@@ -87,40 +80,25 @@ export default function Sidebar() {
     <aside className={styles.sidebar}>
       <div className={styles.header}>
         <div className={styles.logo}>
-          <div className={styles.logoIcon}>
-            <Logo />
-          </div>
+          <div className={styles.logoIcon}><Logo /></div>
           <div>
             <span className={styles.logoName}>SwasthiQ</span>
-            <span className={styles.logoSub}>Clinic Front Desk Agent</span>
+            <span className={styles.logoSub}>Sunrise Clinic</span>
           </div>
         </div>
       </div>
 
       <nav className={styles.nav}>
-        <div className={styles.navSectionLabel}>EXPERIENCE & SIMULATOR</div>
-
-        <NavLink
-          to="/chat"
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <div className={styles.navIconWrapper}>
-            <IconChat />
-          </div>
-          <span className={styles.navText}>Live Agent Chat</span>
-          <span className={styles.liveTag}>LIVE</span>
+        <NavLink to="/chat"
+          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navIconWrapper}><IconChat /></div>
+          <span className={styles.navText}>Front Desk</span>
         </NavLink>
 
-        <div className={styles.navSectionLabel}>CLINIC DATABASE & SCHEDULE</div>
-
-        <NavLink
-          to="/appointments"
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <div className={styles.navIconWrapper}>
-            <IconCalendar />
-          </div>
-          <span className={styles.navText}>Appointments DB</span>
+        <NavLink to="/appointments"
+          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navIconWrapper}><IconCalendar /></div>
+          <span className={styles.navText}>Appointments</span>
           {apptCount > 0 && (
             <span className={styles.badge} style={{ background: '#ecfdf5', color: '#059669', borderColor: '#a7f3d0' }}>
               {apptCount}
@@ -128,28 +106,16 @@ export default function Sidebar() {
           )}
         </NavLink>
 
-        <div className={styles.navSectionLabel}>EVALUATION SCREENS</div>
-
-        <NavLink
-          to="/handoffs"
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <div className={styles.navIconWrapper}>
-            <IconHandoffs />
-          </div>
+        <NavLink to="/handoffs"
+          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navIconWrapper}><IconHandoffs /></div>
           <span className={styles.navText}>Handoff Queue</span>
-          {openCount > 0 && (
-            <span className={styles.badge}>{openCount}</span>
-          )}
+          {openCount > 0 && <span className={styles.badge}>{openCount}</span>}
         </NavLink>
 
-        <NavLink
-          to="/conversations"
-          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
-        >
-          <div className={styles.navIconWrapper}>
-            <IconConversations />
-          </div>
+        <NavLink to="/conversations"
+          className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}>
+          <div className={styles.navIconWrapper}><IconConversations /></div>
           <span className={styles.navText}>Conversations</span>
         </NavLink>
       </nav>
@@ -158,12 +124,12 @@ export default function Sidebar() {
         <div className={`${styles.statusPill} ${online === true ? styles.online : online === false ? styles.offline : ''}`}>
           <div className={styles.statusDot} />
           <span className={styles.statusText}>
-            {online === null ? 'Checking...' : online ? 'Backend Connected' : 'Backend Offline'}
+            {online === null ? 'Checking…' : online ? 'Connected' : 'Offline'}
           </span>
         </div>
         <div className={styles.clinicInfo}>
-          <div className={styles.clinicBadge}>🏥 Dr. Rao & Dr. Sethi</div>
-          <div className={styles.clinicName}>Sunrise Clinic, Dehradun</div>
+          <div className={styles.clinicBadge}>Dr. Rao &amp; Dr. Sethi</div>
+          <div className={styles.clinicName}>Dehradun</div>
         </div>
       </div>
     </aside>

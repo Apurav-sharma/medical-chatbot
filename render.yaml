@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: swasthiq-frontend
+    runtime: static
+    rootDir: swasthiq/frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://medical-chatbot-p9wh.onrender.com/api/*
+      - type: rewrite
+        source: /agent/*
+        destination: https://medical-chatbot-p9wh.onrender.com/agent/*
+      - type: rewrite
+        source: /health
+        destination: https://medical-chatbot-p9wh.onrender.com/health
+      - type: rewrite
+        source: /*
+        destination: /index.html
