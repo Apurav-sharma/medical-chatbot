@@ -343,17 +343,32 @@ function SuccessCard({ doctorName, date, slot, patientName, apptId, onDone }) {
 }
 
 // ─── CancelConfirmCard ────────────────────────────────────────
-function CancelIdentityForm({ onSubmit, busy, error }) {
+function AppointmentIdentityForm({ title, onSubmit, busy, error }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   return (
     <form className={styles.appointmentCard} onSubmit={e => { e.preventDefault(); onSubmit({ name: name.trim(), phone: phone.replace(/\D/g, '').slice(-10) }) }}>
-      <div className={styles.appointmentCardHeader}><div><div className={styles.appointmentCardTitle}>Find your appointments</div><div className={styles.appointmentCardSub}>Enter the patient’s full name and phone number.</div></div></div>
+      <div className={styles.appointmentCardHeader}><div><div className={styles.appointmentCardTitle}>{title}</div><div className={styles.appointmentCardSub}>Enter the patient’s full name and phone number.</div></div></div>
       <div className={styles.fg}><label className={styles.fl}>Full name</label><input className={styles.fi} value={name} onChange={e => setName(e.target.value)} autoComplete="name" required /></div>
       <div className={styles.fg}><label className={styles.fl}>Phone number</label><input className={styles.fi} type="tel" value={phone} onChange={e => setPhone(e.target.value)} autoComplete="tel" required /></div>
       {error && <div className={styles.formErr}>{error}</div>}
       <button className={styles.confirmBtn} type="submit" disabled={busy || !name.trim() || phone.replace(/\D/g, '').length < 10}>{busy ? 'Looking up appointments…' : 'Find appointments'}</button>
     </form>
+  )
+}
+
+function RescheduleAppointmentPicker({ appointments, selectedId, onSelect, onContinue }) {
+  return (
+    <div className={styles.cancelCard}>
+      <div className={styles.cancelTitle}>Choose the appointment to reschedule</div>
+      {appointments.map(appt => (
+        <label key={appt.id} className={styles.cancelInfo} style={{ display: 'flex', gap: 10, cursor: 'pointer', border: appt.id === selectedId ? '1px solid var(--indigo)' : undefined }}>
+          <input type="radio" name="rescheduleAppointment" checked={appt.id === selectedId} onChange={() => onSelect(appt.id)} />
+          <span><strong>{appt.patient_name}</strong> · {appt.doctor_name}<br />{fmtDate(appt.date)} · {fmt12h(appt.start_time)} · {appt.id}</span>
+        </label>
+      ))}
+      <button className={styles.confirmBtn} type="button" onClick={onContinue} disabled={!selectedId}>Choose appointment</button>
+    </div>
   )
 }
 
@@ -378,16 +393,41 @@ function CancelConfirmCard({ appointments, selectedId, onSelect, onKeep, onConfi
   )
 }
 
-function RescheduleForm({ appointment, onSubmit, busy }) {
+function RescheduleForm({ appointment, onSubmit, busy, error }) {
   const [date, setDate] = useState(TODAY_STR)
-  const [time, setTime] = useState('')
+  const [selectedSlot, setSelectedSlot] = useState('')
+  const [slots, setSlots] = useState([])
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [slotError, setSlotError] = useState('')
+
+  useEffect(() => {
+    let active = true
+    setLoadingSlots(true)
+    setSlotError('')
+    setSelectedSlot('')
+    api.searchSlots(appointment.doctor_id, date)
+      .then(result => {
+        if (!active) return
+        const available = result.status === 'ok' ? (result.slots || []) : []
+        setSlots(available)
+        if (!available.length) setSlotError(result.message || 'No available slots on this date. Choose another date.')
+      })
+      .catch(err => { if (active) { setSlots([]); setSlotError(err.message || 'Could not load available slots.') } })
+      .finally(() => { if (active) setLoadingSlots(false) })
+    return () => { active = false }
+  }, [appointment.doctor_id, date])
+
   return (
-    <form onSubmit={e => { e.preventDefault(); if (date && time) onSubmit(date, time) }} className={styles.appointmentCard}>
+    <form onSubmit={e => { e.preventDefault(); if (date && selectedSlot) onSubmit(appointment, date, selectedSlot) }} className={styles.appointmentCard}>
       <div className={styles.appointmentCardHeader}><div><div className={styles.appointmentCardTitle}>Reschedule Appointment</div><div className={styles.appointmentCardSub}>Choose a new date and time</div></div></div>
       {appointment && <div className={styles.cancelInfo}>{appointment.doctor_name} · {fmtDate(appointment.date)} at {fmt12h(appointment.start_time)} · {appointment.id}</div>}
       <div className={styles.fg}><label className={styles.fl}>New date</label><input className={styles.fi} type="date" min={TODAY_STR} value={date} onChange={e => setDate(e.target.value)} required /></div>
-      <div className={styles.fg}><label className={styles.fl}>Preferred time</label><input className={styles.fi} type="time" value={time} onChange={e => setTime(e.target.value)} required /></div>
-      <button className={styles.confirmBtn} type="submit" disabled={busy || !date || !time}>{busy ? 'Checking availability…' : 'Check and reschedule'}</button>
+      <div className={styles.fg}>
+        <label className={styles.fl}>Available times</label>
+        {loadingSlots ? <div className={styles.slotLoading}>Checking available times…</div> : slotError ? <div className={styles.slotNotice}>{slotError}</div> : <div className={styles.slotGrid}>{slots.map(slot => <button key={slot} type="button" className={`${styles.slotBtn} ${selectedSlot === slot ? styles.slotBtnSel : ''}`} onClick={() => setSelectedSlot(slot)}>{fmt12h(slot)}</button>)}</div>}
+      </div>
+      {error && <div className={styles.formErr}>{error}</div>}
+      <button className={styles.confirmBtn} type="submit" disabled={busy || loadingSlots || !date || !selectedSlot}>{busy ? 'Rescheduling…' : 'Confirm reschedule'}</button>
     </form>
   )
 }
@@ -437,6 +477,14 @@ export default function LiveChat() {
   const [selectedCancelId,    setSelectedCancelId]     = useState('')
   const [cancelLookupBusy,    setCancelLookupBusy]     = useState(false)
   const [cancelLookupError,   setCancelLookupError]   = useState('')
+  const [showRescheduleIdentity, setShowRescheduleIdentity] = useState(false)
+  const [rescheduleIdentity,  setRescheduleIdentity]  = useState(null)
+  const [rescheduleAppointments, setRescheduleAppointments] = useState([])
+  const [selectedRescheduleId, setSelectedRescheduleId] = useState('')
+  const [rescheduleLookupBusy, setRescheduleLookupBusy] = useState(false)
+  const [rescheduleLookupError, setRescheduleLookupError] = useState('')
+  const [rescheduleBusy,     setRescheduleBusy]        = useState(false)
+  const [rescheduleError,    setRescheduleError]       = useState('')
   const [showReschedule,      setShowReschedule]      = useState(false)
   const [rescheduleTarget,    setRescheduleTarget]    = useState(null)
   const appointmentsRef = useRef([])
@@ -445,7 +493,7 @@ export default function LiveChat() {
   const bottomRef = useRef(null)
   const inputRef  = useRef(null)
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading, showBooking, showCancelIdentity, cancelAppointments, showReschedule])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages, loading, showBooking, showCancelIdentity, cancelAppointments, showReschedule, showRescheduleIdentity, rescheduleAppointments])
   useEffect(() => { inputRef.current?.focus() }, [])
 
   function push(msg) { setMessages(p => [...p, msg]) }
@@ -506,6 +554,7 @@ export default function LiveChat() {
       const latestCallerTurn = (allTurns.at(-1) || '').toLowerCase()
       const namesCancellationForm = /cancellation form|cancel(?:lation)? form/i.test(resp.reply || '')
       if (action?.type === 'open_cancel' || namesCancellationForm) setShowCancelIdentity(true)
+      if (action?.type === 'open_reschedule' || /reschedule form/i.test(resp.reply || '')) setShowRescheduleIdentity(true)
 
       if (action?.type === 'open_booking') {
         setBookDoctor(action.doctor_id || 'dr_rao')
@@ -514,15 +563,7 @@ export default function LiveChat() {
         setShowBooking(false)
       } else if (action?.type === 'open_reschedule') {
         setShowBooking(false)
-        const verifiedAppointments = appointmentsRef.current
-        const target = verifiedAppointments.find(a => a.id === action.appointment_id) || verifiedAppointments[0]
-        if (target) {
-          setRescheduleTarget(target)
-          setShowReschedule(true)
-        } else {
-          setShowReschedule(false)
-          setRescheduleTarget(null)
-        }
+        setShowRescheduleIdentity(true)
       }
 
     } catch {
@@ -543,12 +584,32 @@ export default function LiveChat() {
     push({ type: 'caller', text: t })
 
     if (/\b(cancel|cancellation|cancel my|cancel the|hatao|radd)\b/i.test(t)) {
+      setShowRescheduleIdentity(false)
+      setShowReschedule(false)
+      setRescheduleAppointments([])
+      setRescheduleTarget(null)
       setCancelAppointments([])
       setSelectedCancelId('')
       setCancelIdentity(null)
       setCancelLookupError('')
       setShowCancelIdentity(true)
       push({ type: 'agent', text: 'I can help cancel an appointment. Please enter the patient’s full name and phone number below so I can find the active appointments.' })
+      return
+    }
+
+    if (/\b(reschedule|rescheduling|change my appointment|move (?:my )?appointment|postpone my appointment)\b/i.test(t)) {
+      setShowCancelIdentity(false)
+      setCancelAppointments([])
+      setCancelIdentity(null)
+      setRescheduleAppointments([])
+      setSelectedRescheduleId('')
+      setRescheduleIdentity(null)
+      setRescheduleLookupError('')
+      setRescheduleError('')
+      setRescheduleTarget(null)
+      setShowReschedule(false)
+      setShowRescheduleIdentity(true)
+      push({ type: 'agent', text: 'I can help reschedule an appointment. Please enter the patient’s full name and phone number below so I can find the active appointments.' })
       return
     }
 
@@ -597,15 +658,65 @@ export default function LiveChat() {
     }
   }
 
-  async function handleRescheduleSubmit(date, time) {
-    const turn = `FORM_SUBMISSION: Reschedule my existing appointment ${rescheduleTarget?.id || ''} to ${date} at ${time}.`
-    const next = [...turns, turn]
-    const priorAssistantReplies = messages.filter(m => m.type === 'agent').map(m => m.text)
-    setTurns(next)
-    push({ type: 'caller', text: `Please reschedule my appointment to ${fmtDate(date)} at ${fmt12h(time)}.` })
-    setShowReschedule(false)
-    setRescheduleTarget(null)
-    await runAgent(next, priorAssistantReplies)
+  async function handleRescheduleLookup(identity) {
+    setRescheduleLookupBusy(true)
+    setRescheduleLookupError('')
+    try {
+      const result = await api.lookupReschedules(identity)
+      if (result.status !== 'ok') {
+        setRescheduleLookupError(result.status === 'ambiguous'
+          ? 'I found more than one matching patient record. Please check the full name and phone number.'
+          : 'I could not find a matching patient record. Check the name and phone number and try again.')
+        return
+      }
+      if (!result.appointments?.length) {
+        setRescheduleLookupError('No active appointments were found for this patient.')
+        return
+      }
+      setRescheduleIdentity(identity)
+      setRescheduleAppointments(result.appointments)
+      setSelectedRescheduleId(result.appointments.length === 1 ? result.appointments[0].id : '')
+      appointmentsRef.current = result.appointments
+      setShowRescheduleIdentity(false)
+      push({ type: 'agent', text: result.appointments.length === 1
+        ? 'I found one active appointment. Select it below, then choose a new available date and time.'
+        : `I found ${result.appointments.length} active appointments. Select the exact appointment you want to reschedule.` })
+    } catch (err) {
+      setRescheduleLookupError(err.message || 'Unable to look up appointments. Please try again.')
+    } finally {
+      setRescheduleLookupBusy(false)
+    }
+  }
+
+  function chooseRescheduleAppointment() {
+    const target = rescheduleAppointments.find(item => item.id === selectedRescheduleId)
+    if (!target) return
+    setRescheduleTarget(target)
+    setRescheduleError('')
+    setShowReschedule(true)
+  }
+
+  async function handleRescheduleSubmit(appointment, date, time) {
+    if (!rescheduleIdentity) return
+    setRescheduleBusy(true)
+    setRescheduleError('')
+    try {
+      await api.confirmReschedule(appointment.id, {
+        ...rescheduleIdentity,
+        new_date: date,
+        new_start: time,
+      })
+      setRescheduleAppointments(current => current.filter(item => item.id !== appointment.id))
+      appointmentsRef.current = appointmentsRef.current.filter(item => item.id !== appointment.id)
+      setRescheduleTarget(null)
+      setShowReschedule(false)
+      setSelectedRescheduleId('')
+      push({ type: 'agent', text: `Appointment ${appointment.id} with ${appointment.doctor_name} has been rescheduled to ${fmtDate(date)} at ${fmt12h(time)}.` })
+    } catch (err) {
+      setRescheduleError(err.message || 'Rescheduling failed. Please try another available time.')
+    } finally {
+      setRescheduleBusy(false)
+    }
   }
 
   async function handleCancellationLookup(identity) {
@@ -691,6 +802,12 @@ export default function LiveChat() {
     appointmentsRef.current = []
     setShowReschedule(false)
     setRescheduleTarget(null)
+    setShowRescheduleIdentity(false)
+    setRescheduleIdentity(null)
+    setRescheduleAppointments([])
+    setSelectedRescheduleId('')
+    setRescheduleLookupError('')
+    setRescheduleError('')
     setBookingServerError(null)
     setPrefill({})
     inputRef.current?.focus()
@@ -779,7 +896,7 @@ export default function LiveChat() {
                 )}
 
                 {showCancelIdentity && (
-                  <CancelIdentityForm onSubmit={handleCancellationLookup} busy={cancelLookupBusy} error={cancelLookupError} />
+                  <AppointmentIdentityForm title="Find appointments to cancel" onSubmit={handleCancellationLookup} busy={cancelLookupBusy} error={cancelLookupError} />
                 )}
                 {cancelAppointments.length > 0 && (
                   <CancelConfirmCard
@@ -791,7 +908,11 @@ export default function LiveChat() {
                     busy={cancelBusy}
                   />
                 )}
-                {showReschedule && rescheduleTarget && <RescheduleForm appointment={rescheduleTarget} onSubmit={handleRescheduleSubmit} busy={loading} />}
+                {showRescheduleIdentity && <AppointmentIdentityForm title="Find appointments to reschedule" onSubmit={handleRescheduleLookup} busy={rescheduleLookupBusy} error={rescheduleLookupError} />}
+                {rescheduleAppointments.length > 0 && !showReschedule && (
+                  <RescheduleAppointmentPicker appointments={rescheduleAppointments} selectedId={selectedRescheduleId} onSelect={setSelectedRescheduleId} onContinue={chooseRescheduleAppointment} />
+                )}
+                {showReschedule && rescheduleTarget && <RescheduleForm appointment={rescheduleTarget} onSubmit={handleRescheduleSubmit} busy={rescheduleBusy} error={rescheduleError} />}
               </>
             )
           }

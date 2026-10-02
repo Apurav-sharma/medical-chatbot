@@ -207,6 +207,28 @@ class CancellationIdentityRequest(BaseModel):
         return digits[-10:]
 
 
+class RescheduleConfirmRequest(CancellationIdentityRequest):
+    new_date: str
+    new_start: str
+
+    @field_validator("new_date")
+    @classmethod
+    def validate_new_date(cls, value: str) -> str:
+        try:
+            datetime.date.fromisoformat(value)
+        except ValueError:
+            raise ValueError("new_date must be YYYY-MM-DD")
+        return value
+
+    @field_validator("new_start")
+    @classmethod
+    def validate_new_start(cls, value: str) -> str:
+        clean = value.strip()
+        if not re.fullmatch(r"\d{1,2}:\d{2}", clean):
+            raise ValueError("new_start must be HH:MM")
+        return clean
+
+
 # ---------------------------------------------------------------------------
 # Main evaluation endpoint
 # ---------------------------------------------------------------------------
@@ -519,7 +541,7 @@ async def cancellation_lookup(req: CancellationIdentityRequest) -> dict:
     allowed_patient_ids = [patient_id, *(row["ward_id"] for row in ward_rows)]
     placeholders = ",".join("?" for _ in allowed_patient_ids)
     rows = conn.execute(
-        f"""SELECT a.id, a.patient_id, a.date, a.start_time, a.end_time,
+        f"""SELECT a.id, a.patient_id, a.doctor_id, a.date, a.start_time, a.end_time,
                    p.name AS patient_name, d.name AS doctor_name
             FROM appointments a
             JOIN patients p ON p.id=a.patient_id
@@ -529,6 +551,12 @@ async def cancellation_lookup(req: CancellationIdentityRequest) -> dict:
         allowed_patient_ids,
     ).fetchall()
     return {"status": "ok", "patient": match["patient"], "appointments": [dict(row) for row in rows]}
+
+
+@app.post("/api/reschedules/lookup")
+async def reschedule_lookup(req: CancellationIdentityRequest) -> dict:
+    """Use the same verified active-appointment listing for rescheduling."""
+    return await cancellation_lookup(req)
 
 
 @app.post("/api/cancellations/{appointment_id}/confirm")
@@ -549,6 +577,29 @@ async def confirm_cancellation(appointment_id: str, req: CancellationIdentityReq
     result = tools.cancel_appointment(conn, appointment_id=appointment_id)
     if result.get("status") != "ok":
         raise HTTPException(status_code=400, detail=result.get("message", "Cancellation failed."))
+    return result
+
+
+@app.post("/api/reschedules/{appointment_id}/confirm")
+async def confirm_reschedule(appointment_id: str, req: RescheduleConfirmRequest) -> dict:
+    """Re-verify identity and ownership before rescheduling the selected appointment."""
+    import tools
+    conn = build_db(in_memory=False)
+    match = tools.lookup_patient(conn, name=req.name, phone=req.phone)
+    if match.get("status") != "found":
+        raise HTTPException(status_code=403, detail="Could not verify the patient. Check the name and phone number.")
+
+    caller_id = match["patient"]["id"]
+    appointment = conn.execute("SELECT patient_id FROM appointments WHERE id=? AND status='booked'", (appointment_id,)).fetchone()
+    wards = {row["ward_id"] for row in conn.execute("SELECT ward_id FROM guardians WHERE guardian_id=?", (caller_id,)).fetchall()}
+    if not appointment or (appointment["patient_id"] != caller_id and appointment["patient_id"] not in wards):
+        raise HTTPException(status_code=403, detail="This appointment is not linked to the verified patient or their listed ward.")
+
+    result = tools.reschedule_appointment(
+        conn, appointment_id=appointment_id, new_date=req.new_date, new_start=req.new_start,
+    )
+    if result.get("status") != "ok":
+        raise HTTPException(status_code=400, detail=result.get("message", "Reschedule failed."))
     return result
 
 
