@@ -1,0 +1,20 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://medical-chatbot-p9wh.onrender.com/api/:path*"
+    },
+    {
+      "source": "/agent/:path*",
+      "destination": "https://medical-chatbot-p9wh.onrender.com/agent/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://medical-chatbot-p9wh.onrender.com/health"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}
