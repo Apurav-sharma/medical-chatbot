@@ -15,19 +15,20 @@
   background: transparent;
 }
 
-/* Responsive for narrow screens or side-by-side viewports */
+/* Tablet: collapse sidebar to icon-only */
 @media (max-width: 900px) {
   .main-content {
-    margin-left: 70px;
+    margin-left: 68px;
   }
 }
 
+/* Mobile: bottom nav bar — sidebar becomes fixed bottom strip */
 @media (max-width: 600px) {
   .app-shell {
     flex-direction: column;
   }
   .main-content {
     margin-left: 0;
-    padding-bottom: 70px;
+    padding-bottom: 72px; /* space for bottom nav */
   }
 }

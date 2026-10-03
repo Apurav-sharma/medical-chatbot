@@ -5,6 +5,7 @@
   box-sizing: border-box;
 }
 @media (max-width: 768px) { .page { padding: 16px 14px; } }
+@media (max-width: 480px) { .page { padding: 12px 10px; } }
 
 .topbar {
   display: flex;
@@ -54,6 +55,25 @@
   min-height: 500px;
   max-height: 820px;
   overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .chatCard {
+    height: calc(100svh - 140px);
+    min-height: 400px;
+    max-height: none;
+    border-radius: var(--radius-sm);
+  }
+}
+@media (max-width: 480px) {
+  .chatCard {
+    height: calc(100svh - 130px);
+    min-height: 360px;
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    margin: 0 -10px;
+  }
 }
 
 .chatHeader {
@@ -180,6 +200,29 @@
   flex-direction: column;
   gap: 14px;
   animation: slideUp 0.2s ease-out;
+}
+
+@media (max-width: 480px) {
+  .appointmentCard {
+    max-width: 100%;
+    padding: 14px 14px;
+    gap: 10px;
+  }
+  .bookingForm {
+    max-width: 100% !important;
+    padding: 14px !important;
+  }
+  .successCard,
+  .cancelCard,
+  .escalCard {
+    max-width: 100% !important;
+  }
+  .doctorPills {
+    grid-template-columns: 1fr !important;
+  }
+  .slotGrid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
 }
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(6px); }
